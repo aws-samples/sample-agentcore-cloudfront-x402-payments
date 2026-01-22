@@ -1,0 +1,157 @@
+# Bedrock AgentCore Gateway Configuration
+# This file defines the configuration for the x402 payer agent Gateway
+# The Gateway provides secure API access to the AgentCore Runtime
+
+gateway:
+  name: x402-payer-agent-gateway
+  description: "API Gateway for x402 Payer Agent - provides secure access to the agent runtime"
+  
+  # Runtime connection
+  runtime:
+    name: x402-payer-agent-runtime
+    # Runtime ARN will be set after runtime deployment
+    runtime_arn: "${X402_PAYER_AGENT_RUNTIME_ARN}"
+  
+  # Authentication configuration
+  # IAM SigV4 is the recommended authentication method for enterprise deployments
+  authentication:
+    # IAM SigV4 authentication (recommended for enterprise)
+    type: IAM_SIGV4
+    
+    # How SigV4 authentication works:
+    # 1. Client creates a canonical request with method, path, headers, and body
+    # 2. Client signs the request using AWS credentials (access key + secret key)
+    # 3. Client includes the signature in the Authorization header
+    # 4. Gateway verifies the signature using IAM
+    # 5. Gateway checks if the IAM principal has required permissions
+    
+    # Required IAM permissions for clients:
+    # - bedrock:InvokeAgent
+    # - bedrock:InvokeAgentWithResponseStream
+    
+    # Allowed principals (IAM users/roles that can invoke the gateway)
+    allowed_principals:
+      - "arn:aws:iam::${AWS_ACCOUNT_ID}:root"
+      # Add specific roles/users as needed:
+      # - "arn:aws:iam::${AWS_ACCOUNT_ID}:role/x402-client-role"
+      # - "arn:aws:iam::${AWS_ACCOUNT_ID}:user/developer"
+    
+    # Credential sources (in order of precedence):
+    # 1. Environment variables: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_SESSION_TOKEN
+    # 2. Shared credentials file: ~/.aws/credentials
+    # 3. AWS config file: ~/.aws/config
+    # 4. IAM role for EC2/Lambda/ECS (instance metadata)
+    # 5. Web identity token (for EKS/OIDC)
+  
+  # Rate limiting configuration
+  rate_limiting:
+    enabled: true
+    # Requests per second per client
+    requests_per_second: 10
+    # Burst capacity
+    burst_capacity: 20
+    # Rate limit by IP or IAM principal
+    limit_by: IAM_PRINCIPAL
+  
+  # CORS configuration (for web clients)
+  cors:
+    enabled: true
+    allowed_origins:
+      - "http://localhost:3000"
+      - "http://localhost:5173"
+      # Add production domains as needed
+    allowed_methods:
+      - "POST"
+      - "OPTIONS"
+    allowed_headers:
+      - "Content-Type"
+      - "Authorization"
+      - "X-Amz-Date"
+      - "X-Amz-Security-Token"
+    max_age_seconds: 3600
+  
+  # Request/Response configuration
+  request:
+    max_body_size_kb: 1024
+    timeout_seconds: 300
+  
+  response:
+    # Include agent reasoning in response (for debugging)
+    include_reasoning: true
+    # Include token usage metrics
+    include_usage_metrics: true
+
+  # Endpoint configuration
+  endpoint:
+    # Custom domain (optional)
+    # custom_domain: "agent.example.com"
+    # API stage
+    stage: "v1"
+    # Base path
+    base_path: "/agent"
+
+  # Logging configuration
+  logging:
+    enabled: true
+    log_level: INFO
+    log_group: "/aws/bedrock-agentcore/gateway/x402-payer-agent"
+    # Log request/response bodies (disable in production for privacy)
+    log_request_body: true
+    log_response_body: true
+
+  # Monitoring configuration
+  monitoring:
+    # CloudWatch metrics
+    metrics:
+      enabled: true
+      namespace: "X402PayerAgent/Gateway"
+      dimensions:
+        - "GatewayName"
+        - "Stage"
+    # CloudWatch alarms
+    alarms:
+      - name: "HighErrorRate"
+        metric: "5XXError"
+        threshold: 5
+        period_seconds: 300
+        evaluation_periods: 2
+        comparison: "GreaterThanThreshold"
+      - name: "HighLatency"
+        metric: "Latency"
+        threshold: 5000
+        period_seconds: 300
+        evaluation_periods: 2
+        comparison: "GreaterThanThreshold"
+
+# Gateway metadata
+metadata:
+  version: "0.1.0"
+  author: "x402 Demo"
+  tags:
+    project: "x402-demo"
+    component: "gateway"
+    environment: "development"
+
+# Usage instructions
+# -----------------
+# 1. Deploy the AgentCore Runtime first (see agentcore_config.yaml)
+# 2. Update runtime_arn with the deployed runtime ARN
+# 3. Deploy the Gateway using CDK or AWS Console
+# 4. Use the Gateway endpoint URL to invoke the agent
+#
+# Example invocation with AWS CLI:
+# aws bedrock-agent-runtime invoke-agent \
+#   --agent-alias-id <ALIAS_ID> \
+#   --agent-id <AGENT_ID> \
+#   --session-id "test-session" \
+#   --input-text "Check my wallet balance"
+#
+# Example invocation with Python (boto3):
+# import boto3
+# client = boto3.client('bedrock-agent-runtime')
+# response = client.invoke_agent(
+#     agentAliasId='<ALIAS_ID>',
+#     agentId='<AGENT_ID>',
+#     sessionId='test-session',
+#     inputText='Check my wallet balance'
+# )
