@@ -4,6 +4,7 @@ from strands import Agent
 from strands.models import BedrockModel
 
 from .config import config
+from .tracing import init_tracing, get_tracer
 from .tools import (
     analyze_payment,
     sign_payment,
@@ -45,6 +46,12 @@ Always be transparent about:
 
 def create_payer_agent() -> Agent:
     """Create and configure the x402 payer agent."""
+    # Initialize tracing
+    init_tracing(
+        service_name="x402-payer-agent",
+        enable_console_export=config.otel_console_export,
+    )
+    
     model = BedrockModel(
         model_id=config.model_id,
         region_name=config.aws_region,
@@ -68,9 +75,14 @@ def create_payer_agent() -> Agent:
 async def run_agent(user_message: str) -> str:
     """Run the agent with a user message and return the response."""
     agent = create_payer_agent()
-    # Strands Agent is callable directly
-    response = agent(user_message)
-    return str(response)
+    tracer = get_tracer()
+    
+    with tracer.start_as_current_span("agent.run") as span:
+        span.set_attribute("agent.message_length", len(user_message))
+        # Strands Agent is callable directly
+        response = agent(user_message)
+        span.set_attribute("agent.response_length", len(str(response)))
+        return str(response)
 
 
 # Entry point for local testing

@@ -12,8 +12,8 @@ class TestAgentConfig:
     def test_default_values(self):
         """Test that default values are set correctly."""
         config = AgentConfig()
-        
-        assert config.model_id == "anthropic.claude-3-sonnet-20240229-v1:0"
+
+        assert config.model_id == "anthropic.claude-sonnet-4-20250514-v1:0"
         assert config.aws_region == "us-west-2"
         assert config.network_id == "base-sepolia"
         assert config.cdp_api_key_name == ""
@@ -24,8 +24,8 @@ class TestAgentConfig:
         """Test from_env uses defaults when env vars not set."""
         with patch.dict(os.environ, {}, clear=True):
             config = AgentConfig.from_env()
-            
-            assert config.model_id == "anthropic.claude-3-sonnet-20240229-v1:0"
+
+            assert config.model_id == "anthropic.claude-sonnet-4-20250514-v1:0"
             assert config.aws_region == "us-west-2"
             assert config.network_id == "base-sepolia"
 

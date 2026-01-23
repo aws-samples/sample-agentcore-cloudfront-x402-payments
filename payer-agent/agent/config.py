@@ -12,7 +12,7 @@ class AgentConfig:
     """Configuration for the payer agent."""
 
     # Bedrock model configuration
-    model_id: str = "anthropic.claude-3-sonnet-20240229-v1:0"
+    model_id: str = "anthropic.claude-sonnet-4-20250514-v1:0"
     aws_region: str = "us-west-2"
 
     # CDP (Coinbase Developer Platform) configuration
@@ -25,6 +25,10 @@ class AgentConfig:
 
     # Seller API configuration
     seller_api_url: str = ""
+    
+    # OpenTelemetry configuration
+    otel_endpoint: str = ""
+    otel_console_export: bool = False
 
     @classmethod
     def from_env(cls) -> "AgentConfig":
@@ -37,6 +41,8 @@ class AgentConfig:
             cdp_wallet_secret=os.getenv("CDP_WALLET_SECRET", ""),
             network_id=os.getenv("NETWORK_ID", cls.network_id),
             seller_api_url=os.getenv("SELLER_API_URL", ""),
+            otel_endpoint=os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", ""),
+            otel_console_export=os.getenv("OTEL_CONSOLE_EXPORT", "").lower() == "true",
         )
 
 

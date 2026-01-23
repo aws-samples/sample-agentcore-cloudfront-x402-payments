@@ -22,7 +22,7 @@ runtime:
   
   # Environment variables
   environment:
-    BEDROCK_MODEL_ID: "anthropic.claude-3-sonnet-20240229-v1:0"
+    BEDROCK_MODEL_ID: "anthropic.claude-sonnet-4-20250514-v1:0"
     AWS_REGION: "us-west-2"
     NETWORK_ID: "base-sepolia"
     # CDP credentials loaded from Secrets Manager
