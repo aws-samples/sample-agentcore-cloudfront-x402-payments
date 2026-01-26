@@ -125,6 +125,35 @@ check_payer_infrastructure() {
     echo ""
 }
 
+# Check Web UI
+check_web_ui() {
+    print_status "Checking Web UI..."
+    
+    if [ -d "$PROJECT_ROOT/web-ui/node_modules" ]; then
+        print_success "npm dependencies installed"
+    else
+        print_error "npm dependencies not installed"
+        ((ERRORS++))
+    fi
+    
+    if [ -f "$PROJECT_ROOT/web-ui/.env" ]; then
+        print_success ".env file exists"
+    else
+        print_warning ".env file not found (optional for demo mode)"
+        ((WARNINGS++))
+    fi
+    
+    # Check if build works
+    cd "$PROJECT_ROOT/web-ui"
+    if npm run build &>/dev/null; then
+        print_success "Build compiles successfully"
+    else
+        print_error "Build failed"
+        ((ERRORS++))
+    fi
+    echo ""
+}
+
 # Check AWS Configuration
 check_aws() {
     print_status "Checking AWS Configuration..."
@@ -196,6 +225,7 @@ check_repos
 check_payer_agent
 check_seller_infrastructure
 check_payer_infrastructure
+check_web_ui
 check_aws
 print_summary
 

@@ -192,6 +192,32 @@ setup_seller_infrastructure() {
     echo ""
 }
 
+# Setup web UI (React)
+setup_web_ui() {
+    print_status "Setting up Web UI (React)..."
+    
+    cd "$PROJECT_ROOT/web-ui"
+    
+    # Install npm dependencies
+    print_status "Installing npm dependencies..."
+    npm install
+    
+    # Create .env from example if it doesn't exist
+    if [ ! -f ".env" ]; then
+        if [ -f ".env.example" ]; then
+            cp .env.example .env
+            print_warning "Created .env from .env.example - please update with your values"
+        fi
+    fi
+    
+    # Build
+    print_status "Building Web UI..."
+    npm run build
+    
+    print_success "Web UI setup complete"
+    echo ""
+}
+
 # Verify AWS credentials
 verify_aws_credentials() {
     print_status "Verifying AWS credentials..."
@@ -218,6 +244,7 @@ print_next_steps() {
     echo "1. Configure environment variables:"
     echo "   - Edit payer-agent/.env with your CDP credentials"
     echo "   - Edit seller-infrastructure/.env with your AWS account ID"
+    echo "   - Edit web-ui/.env with your Gateway endpoint (optional)"
     echo ""
     echo "2. Configure AWS credentials (if not already done):"
     echo "   aws configure"
@@ -235,6 +262,9 @@ print_next_steps() {
     echo "6. Run the payer agent locally:"
     echo "   cd payer-agent && source .venv/bin/activate && python -m agent.main"
     echo ""
+    echo "7. Run the Web UI (demo mode - no backend required):"
+    echo "   cd web-ui && npm run dev"
+    echo ""
     echo -e "${GREEN}Setup complete!${NC}"
 }
 
@@ -245,6 +275,7 @@ main() {
     setup_payer_agent
     setup_payer_infrastructure
     setup_seller_infrastructure
+    setup_web_ui
     print_next_steps
 }
 

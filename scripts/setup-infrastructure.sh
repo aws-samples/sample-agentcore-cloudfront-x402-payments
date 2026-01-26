@@ -70,10 +70,28 @@ setup_payer() {
     print_success "Payer Infrastructure ready"
 }
 
+# Setup Web UI
+setup_webui() {
+    print_status "Setting up Web UI..."
+    cd "$PROJECT_ROOT/web-ui"
+    
+    npm install --silent
+    
+    if [ ! -f ".env" ] && [ -f ".env.example" ]; then
+        cp .env.example .env
+        print_warning "Created web-ui/.env from .env.example"
+    fi
+    
+    npm run build
+    print_success "Web UI ready"
+}
+
 # Main
 setup_seller
 echo ""
 setup_payer
+echo ""
+setup_webui
 
 echo ""
 print_success "Infrastructure setup complete!"
@@ -90,3 +108,6 @@ echo "   cd seller-infrastructure && npm run deploy"
 echo ""
 echo "4. Deploy payer infrastructure:"
 echo "   cd payer-infrastructure && npm run deploy"
+echo ""
+echo "5. Run the Web UI locally (demo mode):"
+echo "   cd web-ui && npm run dev"

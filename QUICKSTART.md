@@ -17,7 +17,28 @@ You'll also need:
 - AWS account with Bedrock access enabled
 - [Coinbase Developer Platform](https://portal.cdp.coinbase.com/) account and API keys
 
-## Step 1: Clone and Setup (5 min)
+## Quick Demo (No AWS Required)
+
+Want to see the UI without deploying anything? The Web UI has a demo mode:
+
+```bash
+# Clone the repository
+git clone https://github.com/joshuamarksmith/x402-agentcore-demo.git
+cd x402-agentcore-demo
+
+# Run the Web UI
+cd web-ui
+npm install
+npm run dev
+
+# Open http://localhost:5173
+```
+
+This simulates the entire x402 payment flow with realistic delays and AI reasoning visualization.
+
+## Full Setup
+
+### Step 1: Clone and Setup (5 min)
 
 ```bash
 # Clone the repository
@@ -36,6 +57,7 @@ The setup script will:
 - Verify prerequisites
 - Create Python virtual environment
 - Install all dependencies
+- Build the Web UI
 - Create `.env` files from examples
 
 ## Step 2: Configure Credentials (5 min)
@@ -134,7 +156,29 @@ Agent: I received a 402 Payment Required response. The content costs 0.001 USDC.
        Transaction hash: 0x123...
 ```
 
-## Step 5: Deploy Payer Infrastructure (Optional)
+## Step 5: Run the Web UI (5 min)
+
+The Web UI provides a visual interface for the x402 payment flow:
+
+```bash
+cd web-ui
+npm run dev
+
+# Open http://localhost:5173
+```
+
+Features:
+- **Demo Mode** (default): Simulates the entire flow without backend
+- **Live Mode**: Connects to deployed AgentCore Gateway
+
+To enable live mode, configure `web-ui/.env`:
+```bash
+VITE_GATEWAY_ENDPOINT=https://your-gateway-url
+VITE_AWS_REGION=us-west-2
+VITE_AGENT_ID=your-agent-id
+```
+
+## Step 6: Deploy Payer Infrastructure (Optional)
 
 For production deployment to AgentCore:
 
