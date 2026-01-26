@@ -156,6 +156,16 @@ export enum MetricName {
   S3_FETCH_SUCCESS = 'S3FetchSuccess',
   S3_FETCH_ERROR = 'S3FetchError',
   S3_CACHE_HIT = 'S3CacheHit',
+  // New custom metrics
+  PAYMENT_AMOUNT_WEI = 'PaymentAmountWei',
+  PAYMENT_AMOUNT_USD = 'PaymentAmountUSD',
+  UNIQUE_PAYERS = 'UniquePayers',
+  CONTENT_BYTES_SERVED = 'ContentBytesServed',
+  AUTHORIZATION_EXPIRED = 'AuthorizationExpired',
+  SIGNATURE_INVALID = 'SignatureInvalid',
+  AMOUNT_INSUFFICIENT = 'AmountInsufficient',
+  NETWORK_MISMATCH = 'NetworkMismatch',
+  ASSET_MISMATCH = 'AssetMismatch',
 }
 
 /**

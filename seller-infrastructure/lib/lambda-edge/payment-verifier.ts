@@ -633,6 +633,28 @@ export const handler = async (
         payer,
       });
       logger.incrementCounter(MetricName.VALIDATION_ERROR);
+      
+      // Record specific validation error metrics
+      switch (paramValidation.invalidReason) {
+        case 'invalid_exact_evm_payload_authorization_valid_before':
+        case 'invalid_exact_evm_payload_authorization_valid_after':
+          logger.incrementCounter(MetricName.AUTHORIZATION_EXPIRED);
+          break;
+        case 'invalid_signature_format':
+        case 'invalid_signature_length':
+          logger.incrementCounter(MetricName.SIGNATURE_INVALID);
+          break;
+        case 'invalid_exact_evm_payload_authorization_value':
+          logger.incrementCounter(MetricName.AMOUNT_INSUFFICIENT);
+          break;
+        case 'network_mismatch':
+          logger.incrementCounter(MetricName.NETWORK_MISMATCH);
+          break;
+        case 'asset_mismatch':
+          logger.incrementCounter(MetricName.ASSET_MISMATCH);
+          break;
+      }
+      
       logger.recordMetric(MetricName.LATENCY, logger.getElapsedMs());
       logger.emitMetrics();
       return create402Response(
@@ -698,6 +720,15 @@ export const handler = async (
 
     // Payment verified and settled - return dynamic content
     logger.incrementCounter(MetricName.PAYMENT_SETTLED);
+    
+    // Record payment amount metric
+    try {
+      const amountWei = BigInt(paymentPayload.payload.authorization.value);
+      logger.recordMetric(MetricName.PAYMENT_AMOUNT_WEI, Number(amountWei));
+    } catch {
+      // Ignore if amount parsing fails
+    }
+    
     logger.info('Payment settled successfully', {
       payer,
       transactionHash: settlement.transaction,
@@ -708,6 +739,10 @@ export const handler = async (
     // Get dynamic content from content manager
     const content = await contentManager.getContent(uri);
     logger.incrementCounter(MetricName.CONTENT_GENERATED);
+    
+    // Record content size metric
+    const contentJson = JSON.stringify(content);
+    logger.recordMetric(MetricName.CONTENT_BYTES_SERVED, contentJson.length);
     
     // Create settlement response header
     const settlementResponse: SettlementResponse = {

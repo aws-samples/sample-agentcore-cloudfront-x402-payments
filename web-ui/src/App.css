@@ -1,0 +1,90 @@
+.app {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2rem;
+  min-height: 100vh;
+}
+
+.app-header {
+  text-align: center;
+  margin-bottom: 3rem;
+}
+
+.app-header h1 {
+  font-size: 2.5rem;
+  margin-bottom: 0.5rem;
+  background: linear-gradient(135deg, #646cff 0%, #9d4edd 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.app-header p {
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 1.1rem;
+}
+
+.app-main {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 2rem;
+  justify-content: center;
+  align-items: flex-start;
+}
+
+.wallet-section,
+.content-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.wallet-section h2,
+.content-section h2 {
+  font-size: 1.25rem;
+  color: rgba(255, 255, 255, 0.8);
+  margin: 0;
+}
+
+.toggle-btn {
+  background: linear-gradient(135deg, #646cff 0%, #9d4edd 100%);
+  border: none;
+  color: white;
+  padding: 0.75rem 1.5rem;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.toggle-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(100, 108, 255, 0.4);
+}
+
+.toggle-btn:active {
+  transform: translateY(0);
+}
+
+/* Light mode support */
+@media (prefers-color-scheme: light) {
+  .app-header p {
+    color: rgba(0, 0, 0, 0.6);
+  }
+
+  .wallet-section h2,
+  .content-section h2 {
+    color: rgba(0, 0, 0, 0.8);
+  }
+}
+
+/* Responsive layout */
+@media (max-width: 900px) {
+  .app-main {
+    flex-direction: column;
+    align-items: center;
+  }
+}
