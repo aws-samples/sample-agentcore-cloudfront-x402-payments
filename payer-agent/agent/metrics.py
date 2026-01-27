@@ -63,6 +63,20 @@ class PayerMetricName(str, Enum):
     PAYMENT_AMOUNT_WEI = "PaymentAmountWei"
     PAYMENT_AMOUNT_ETH = "PaymentAmountETH"
     
+    # MCP Tool Discovery Metrics
+    MCP_DISCOVERY_COUNT = "MCPDiscoveryCount"
+    MCP_DISCOVERY_SUCCESS = "MCPDiscoverySuccess"
+    MCP_DISCOVERY_FAILURE = "MCPDiscoveryFailure"
+    MCP_DISCOVERY_LATENCY = "MCPDiscoveryLatency"
+    MCP_TOOLS_DISCOVERED = "MCPToolsDiscovered"
+    
+    # MCP Tool Invocation Metrics
+    MCP_INVOCATION_COUNT = "MCPInvocationCount"
+    MCP_INVOCATION_SUCCESS = "MCPInvocationSuccess"
+    MCP_INVOCATION_FAILURE = "MCPInvocationFailure"
+    MCP_INVOCATION_402 = "MCPInvocation402"
+    MCP_INVOCATION_LATENCY = "MCPInvocationLatency"
+    
     # Error Metrics
     AGENT_ERROR_COUNT = "AgentErrorCount"
     VALIDATION_ERROR_COUNT = "ValidationErrorCount"
@@ -432,6 +446,83 @@ class MetricsEmitter:
                 "operation": operation,
             },
         )
+    
+    def record_mcp_discovery(
+        self,
+        success: bool,
+        latency_ms: float,
+        tools_count: int = 0,
+        error: Optional[str] = None,
+    ) -> None:
+        """
+        Record an MCP tool discovery operation.
+        
+        Args:
+            success: Whether discovery was successful
+            latency_ms: Time taken for discovery in milliseconds
+            tools_count: Number of tools discovered
+            error: Error message if failed
+        """
+        dims = MetricDimensions(
+            error_type=error[:50] if error else None,
+        )
+        
+        metrics: dict[PayerMetricName, tuple[float, MetricUnit]] = {
+            PayerMetricName.MCP_DISCOVERY_COUNT: (1, MetricUnit.COUNT),
+            PayerMetricName.MCP_DISCOVERY_LATENCY: (latency_ms, MetricUnit.MILLISECONDS),
+        }
+        
+        if success:
+            metrics[PayerMetricName.MCP_DISCOVERY_SUCCESS] = (1, MetricUnit.COUNT)
+            metrics[PayerMetricName.MCP_TOOLS_DISCOVERED] = (tools_count, MetricUnit.COUNT)
+        else:
+            metrics[PayerMetricName.MCP_DISCOVERY_FAILURE] = (1, MetricUnit.COUNT)
+        
+        properties = {"toolsCount": tools_count}
+        if error:
+            properties["error"] = error
+        
+        self.emit_multiple(metrics, dims, properties)
+    
+    def record_mcp_invocation(
+        self,
+        success: bool,
+        tool_name: str,
+        latency_ms: float,
+        payment_required: bool = False,
+        error: Optional[str] = None,
+    ) -> None:
+        """
+        Record an MCP tool invocation.
+        
+        Args:
+            success: Whether invocation was successful
+            tool_name: Name of the tool invoked
+            latency_ms: Time taken for invocation in milliseconds
+            payment_required: Whether 402 was returned
+            error: Error message if failed
+        """
+        dims = MetricDimensions(
+            error_type=error[:50] if error else None,
+        )
+        
+        metrics: dict[PayerMetricName, tuple[float, MetricUnit]] = {
+            PayerMetricName.MCP_INVOCATION_COUNT: (1, MetricUnit.COUNT),
+            PayerMetricName.MCP_INVOCATION_LATENCY: (latency_ms, MetricUnit.MILLISECONDS),
+        }
+        
+        if success:
+            metrics[PayerMetricName.MCP_INVOCATION_SUCCESS] = (1, MetricUnit.COUNT)
+        elif payment_required:
+            metrics[PayerMetricName.MCP_INVOCATION_402] = (1, MetricUnit.COUNT)
+        else:
+            metrics[PayerMetricName.MCP_INVOCATION_FAILURE] = (1, MetricUnit.COUNT)
+        
+        properties = {"toolName": tool_name}
+        if error:
+            properties["error"] = error
+        
+        self.emit_multiple(metrics, dims, properties)
 
 
 # Global metrics emitter instance
