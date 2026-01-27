@@ -25,11 +25,31 @@ info:
 
 servers:
   - url: https://{cloudfront-distribution}.cloudfront.net
-    description: CloudFront distribution serving protected content
+    description: CloudFront distribution serving protected content (deployed via seller-infrastructure CDK stack)
     variables:
       cloudfront-distribution:
         default: d1234567890abc
-        description: CloudFront distribution ID
+        description: |
+          CloudFront distribution ID from seller-infrastructure deployment.
+          
+          To get the distribution ID after deploying:
+            cd seller-infrastructure && cdk deploy
+            # Look for output: X402DistributionId = dXXXXXXXXXXXXX
+          
+          Or query CloudFormation:
+            aws cloudformation describe-stacks --stack-name X402SellerStack \
+              --query "Stacks[0].Outputs[?ExportName=='X402DistributionId'].OutputValue" \
+              --output text
+  - url: https://{seller-cloudfront-url}
+    description: |
+      Environment variable reference for Gateway target configuration.
+      Set X402_SELLER_CLOUDFRONT_URL to the CloudFront distribution hostname.
+    variables:
+      seller-cloudfront-url:
+        default: dXXXXXXXXXXXXX.cloudfront.net
+        description: |
+          CloudFront distribution hostname from seller-infrastructure deployment.
+          This is typically set via the X402_SELLER_CLOUDFRONT_URL environment variable.
 
 tags:
   - name: Premium Content
@@ -73,6 +93,27 @@ paths:
         This endpoint implements x402 v2 protocol with the "exact" payment scheme.
       tags:
         - Premium Content
+      # MCP Tool Extension - defines how this operation appears as an MCP tool
+      x-mcp-tool:
+        name: get_premium_article
+        description: |
+          Retrieve a premium article about AI and blockchain integration.
+          Returns article title, author, publication date, full content, and tags.
+          Requires x402 payment: 1000 USDC units (0.001 USDC) on Base Sepolia testnet.
+        category: content
+        tags:
+          - premium-content
+          - article
+          - ai
+          - blockchain
+          - x402-payment
+        priority: 1
+        requires_payment: true
+        payment:
+          price_units: "1000"
+          price_display: "0.001 USDC"
+          asset: USDC
+          network: Base Sepolia
       parameters:
         - $ref: '#/components/parameters/PaymentSignature'
       responses:
@@ -168,6 +209,26 @@ paths:
         **Network**: Base Sepolia (eip155:84532)
       tags:
         - Market Data
+      # MCP Tool Extension
+      x-mcp-tool:
+        name: get_weather_data
+        description: |
+          Get real-time weather data and 5-day forecast for San Francisco.
+          Returns current conditions (temperature, humidity, wind) and daily forecasts.
+          Requires x402 payment: 500 USDC units (0.0005 USDC) on Base Sepolia testnet.
+        category: market-data
+        tags:
+          - weather
+          - forecast
+          - real-time
+          - x402-payment
+        priority: 2
+        requires_payment: true
+        payment:
+          price_units: "500"
+          price_display: "0.0005 USDC"
+          asset: USDC
+          network: Base Sepolia
       parameters:
         - $ref: '#/components/parameters/PaymentSignature'
       responses:
@@ -250,6 +311,28 @@ paths:
         This endpoint implements x402 v2 protocol with the "exact" payment scheme.
       tags:
         - Market Data
+      # MCP Tool Extension
+      x-mcp-tool:
+        name: get_market_analysis
+        description: |
+          Get cryptocurrency market analysis with real-time prices and sentiment.
+          Returns prices for BTC/ETH/SOL, 24h changes, volume, sentiment analysis, and key events.
+          Requires x402 payment: 2000 USDC units (0.002 USDC) on Base Sepolia testnet.
+        category: market-data
+        tags:
+          - cryptocurrency
+          - market-analysis
+          - prices
+          - sentiment
+          - real-time
+          - x402-payment
+        priority: 3
+        requires_payment: true
+        payment:
+          price_units: "2000"
+          price_display: "0.002 USDC"
+          asset: USDC
+          network: Base Sepolia
       parameters:
         - $ref: '#/components/parameters/PaymentSignature'
       responses:
@@ -397,6 +480,28 @@ paths:
         This endpoint implements x402 v2 protocol with the "exact" payment scheme.
       tags:
         - Research
+      # MCP Tool Extension
+      x-mcp-tool:
+        name: get_research_report
+        description: |
+          Get in-depth blockchain technology research report for 2026.
+          Returns executive summary, market overview, technology trends, and strategic recommendations.
+          Requires x402 payment: 5000 USDC units (0.005 USDC) on Base Sepolia testnet.
+        category: research
+        tags:
+          - research
+          - blockchain
+          - technology-trends
+          - enterprise
+          - premium-content
+          - x402-payment
+        priority: 4
+        requires_payment: true
+        payment:
+          price_units: "5000"
+          price_display: "0.005 USDC"
+          asset: USDC
+          network: Base Sepolia
       parameters:
         - $ref: '#/components/parameters/PaymentSignature'
       responses:
