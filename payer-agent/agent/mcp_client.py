@@ -277,8 +277,22 @@ class MCPClient:
                             error=f"Discovery failed with status {response.status_code}",
                         )
                     
-                    data = response.json()
-                    tools_data = data.get("tools", [])
+                    try:
+                        data = response.json()
+                    except (json.JSONDecodeError, ValueError) as e:
+                        span.set_attribute("error.type", "json_parse_error")
+                        span.set_attribute("error.message", str(e))
+                        metrics.record_mcp_discovery(
+                            success=False,
+                            latency_ms=latency_ms,
+                            error="json_parse_error",
+                        )
+                        return MCPDiscoveryResponse(
+                            success=False,
+                            error=f"Failed to parse discovery response: {str(e)}",
+                        )
+                    
+                    tools_data = data.get("tools") or []  # Handle None explicitly
                     
                     # Parse tool definitions
                     tools = []
