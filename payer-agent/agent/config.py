@@ -11,9 +11,12 @@ load_dotenv()
 class AgentConfig:
     """Configuration for the payer agent."""
 
-    # Bedrock model configuration
-    model_id: str = "anthropic.claude-sonnet-4-20250514-v1:0"
+    # AgentCore Runtime configuration
+    agent_runtime_arn: str = ""
     aws_region: str = "us-west-2"
+    
+    # Bedrock model configuration (for local development)
+    model_id: str = "anthropic.claude-sonnet-4-20250514-v1:0"
 
     # CDP (Coinbase Developer Platform) configuration
     cdp_api_key_name: str = ""
@@ -34,8 +37,9 @@ class AgentConfig:
     def from_env(cls) -> "AgentConfig":
         """Load configuration from environment variables."""
         return cls(
-            model_id=os.getenv("BEDROCK_MODEL_ID", cls.model_id),
+            agent_runtime_arn=os.getenv("AGENT_RUNTIME_ARN", ""),
             aws_region=os.getenv("AWS_REGION", cls.aws_region),
+            model_id=os.getenv("BEDROCK_MODEL_ID", cls.model_id),
             cdp_api_key_name=os.getenv("CDP_API_KEY_ID", ""),
             cdp_api_key_private_key=os.getenv("CDP_API_KEY_SECRET", ""),
             cdp_wallet_secret=os.getenv("CDP_WALLET_SECRET", ""),

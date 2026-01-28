@@ -17,6 +17,9 @@ dependencies = [
     "pydantic>=2.0.0",
     "python-dotenv>=1.0.0",
     "pyyaml>=6.0.0",
+    # FastAPI for the web UI backend
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.30.0",
     # OpenTelemetry for distributed tracing
     "opentelemetry-api>=1.25.0",
     "opentelemetry-sdk>=1.25.0",

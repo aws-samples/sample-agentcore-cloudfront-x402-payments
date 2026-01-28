@@ -20,6 +20,12 @@ from .mcp_client import (
     get_tool_info,
     list_available_tools,
 )
+from .runtime_client import (
+    RuntimeClient,
+    RuntimeClientConfig,
+    InvocationResponse,
+    create_runtime_client,
+)
 
 __all__ = [
     # Agent creation and execution
@@ -44,4 +50,9 @@ __all__ = [
     "discover_mcp_tools",
     "get_tool_info",
     "list_available_tools",
+    # Runtime Client (for invoking agents deployed to AgentCore Runtime)
+    "RuntimeClient",
+    "RuntimeClientConfig",
+    "InvocationResponse",
+    "create_runtime_client",
 ]

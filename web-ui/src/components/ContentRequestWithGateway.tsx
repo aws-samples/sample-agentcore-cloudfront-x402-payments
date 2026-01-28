@@ -1,18 +1,24 @@
 /**
- * ContentRequest component with Gateway API integration
+ * ContentRequest component with AgentCore Runtime API integration
  * 
  * This component extends the base ContentRequest to use the real
- * AgentCore Gateway API for agent invocations.
+ * AgentCore Runtime API (invoke_agent_runtime) for agent invocations.
  */
 
 import { useState, useCallback } from 'react';
 import './ContentRequest.css';
 import { TransactionConfirmation, type TransactionDetails } from './TransactionConfirmation';
-import { AuthStatus } from './AuthStatus';
 import { AgentReasoning } from './AgentReasoning';
 import { RealTimeStatus, useRealTimeStatus } from './RealTimeStatus';
-import { useGatewayClient } from '../hooks';
-import type { StreamChunk, AgentTrace } from '../api';
+import { useAgentClient } from '../hooks';
+import type { StreamChunk } from '../api';
+
+// Agent trace type for reasoning display
+interface AgentTrace {
+  type: string;
+  data: unknown;
+  timestamp: string;
+}
 
 // Content item types matching seller infrastructure
 export interface ContentItem {
@@ -125,20 +131,27 @@ export function ContentRequestWithGateway({
   // Real-time status hook
   const realTimeStatus = useRealTimeStatus();
 
-  // Gateway client hook
+  // Agent reasoning state (built from streaming chunks)
+  const [reasoning, setReasoning] = useState<Array<{
+    step: string;
+    description: string;
+    tool?: string;
+    toolInput?: unknown;
+  }>>([]);
+
+  // Agent client hook - uses new AgentCore Runtime API
   const handleChunk = useCallback((chunk: StreamChunk) => {
-    if (chunk.type === 'trace' && chunk.trace) {
-      setAgentTraces(prev => [...prev, chunk.trace!]);
-      // Add real-time event for trace
-      const traceData = chunk.trace.data as Record<string, unknown> | undefined;
-      if (traceData?.rationale) {
-        realTimeStatus.addEvent('agent', String(traceData.rationale), {
-          actionGroup: traceData.actionGroup,
-        });
-      }
-    } else if (chunk.type === 'text' && chunk.text) {
+    if (chunk.type === 'text' && chunk.text) {
       // Add real-time event for streaming text
       realTimeStatus.addEvent('response', `Agent: ${chunk.text.substring(0, 100)}${chunk.text.length > 100 ? '...' : ''}`);
+      
+      // Try to parse reasoning from text (agent may include structured output)
+      if (chunk.text.includes('analyzing') || chunk.text.includes('evaluating')) {
+        setReasoning(prev => [...prev, {
+          step: `Step ${prev.length + 1}`,
+          description: chunk.text || '',
+        }]);
+      }
     } else if (chunk.type === 'error' && chunk.error) {
       realTimeStatus.addEvent('error', chunk.error);
     }
@@ -146,14 +159,12 @@ export function ContentRequestWithGateway({
 
   const { 
     invokeStreaming,
-    isLoading: gatewayLoading,
-    error: gatewayError,
-    isAuthenticated,
-    authMethod,
-    refreshAuth,
-    reasoning: hookReasoning,
+    isLoading: agentLoading,
+    error: agentError,
+    isConnected,
+    healthCheck,
     streamingText,
-  } = useGatewayClient({
+  } = useAgentClient({
     onChunk: handleChunk,
   });
 
@@ -167,6 +178,7 @@ export function ContentRequestWithGateway({
     setStepTimings({});
     setFlowStartTime(null);
     setTotalElapsed(0);
+    setReasoning([]);
     realTimeStatus.reset();
   };
 
@@ -183,6 +195,7 @@ export function ContentRequestWithGateway({
     setResult(null);
     setAgentTraces([]);
     setStepTimings({});
+    setReasoning([]);
     const startTime = Date.now();
     setFlowStartTime(startTime);
 
@@ -319,6 +332,7 @@ export function ContentRequestWithGateway({
     setResult(null);
     setAgentTraces([]);
     setStepTimings({});
+    setReasoning([]);
     const startTime = Date.now();
     setFlowStartTime(startTime);
 
@@ -480,6 +494,7 @@ export function ContentRequestWithGateway({
     setStepTimings({});
     setFlowStartTime(null);
     setTotalElapsed(0);
+    setReasoning([]);
     realTimeStatus.reset();
   };
 
@@ -496,21 +511,24 @@ export function ContentRequestWithGateway({
         )}
       </div>
 
-      {/* Authentication Status (only show in live mode) */}
+      {/* Connection Status (only show in live mode) */}
       {!mockMode && (
-        <AuthStatus
-          isAuthenticated={isAuthenticated}
-          authMethod={authMethod}
-          onRefresh={refreshAuth}
-          showDetails={true}
-        />
+        <div className={`connection-status ${isConnected ? 'connected' : 'disconnected'}`}>
+          <span className="status-dot" />
+          {isConnected ? 'Backend Connected' : 'Backend Disconnected'}
+          {!isConnected && (
+            <button className="reconnect-btn" onClick={() => healthCheck()}>
+              Retry
+            </button>
+          )}
+        </div>
       )}
 
-      {/* Gateway Error Display */}
-      {gatewayError && (
+      {/* Agent Error Display */}
+      {agentError && (
         <div className="gateway-error">
           <span className="error-icon">⚠️</span>
-          Gateway Error: {gatewayError}
+          Agent Error: {agentError}
         </div>
       )}
 
@@ -521,7 +539,7 @@ export function ContentRequestWithGateway({
             key={item.id}
             className={`content-card ${selectedItem?.id === item.id ? 'selected' : ''}`}
             onClick={() => handleSelectContent(item)}
-            disabled={(status !== 'idle' && status !== 'success' && status !== 'error') || gatewayLoading}
+            disabled={(status !== 'idle' && status !== 'success' && status !== 'error') || agentLoading}
           >
             <div className="content-card-title">{item.title}</div>
             <div className="content-card-description">{item.description}</div>
@@ -546,9 +564,9 @@ export function ContentRequestWithGateway({
             <button
               className="request-btn"
               onClick={handleRequestContent}
-              disabled={!walletConnected || gatewayLoading}
+              disabled={!walletConnected || agentLoading}
             >
-              {gatewayLoading ? 'Processing...' : 
+              {agentLoading ? 'Processing...' : 
                walletConnected ? 'Request Content' : 'Connect Wallet First'}
             </button>
           )}
@@ -628,10 +646,10 @@ export function ContentRequestWithGateway({
 
           {/* Agent Reasoning - Enhanced Component */}
           <AgentReasoning
-            reasoning={hookReasoning}
+            reasoning={reasoning}
             streamingText={streamingText}
             traces={agentTraces}
-            isProcessing={gatewayLoading || (status !== 'success' && status !== 'error')}
+            isProcessing={agentLoading || (status !== 'success' && status !== 'error')}
             expanded={true}
           />
 

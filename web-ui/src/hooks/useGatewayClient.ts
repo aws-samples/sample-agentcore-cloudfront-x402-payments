@@ -12,7 +12,7 @@ import {
   type StreamChunk,
   type AgentReasoning,
   type AuthMethod,
-} from '../api';
+} from '../api/gateway-client';
 
 export interface UseGatewayClientOptions {
   /** Gateway configuration */

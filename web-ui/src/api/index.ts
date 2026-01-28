@@ -3,19 +3,35 @@
  */
 
 export {
+  AgentClient,
+  createAgentClient,
+} from './agent-client';
+
+export type {
+  AgentConfig,
+  InvokeRequest,
+  InvokeResponse,
+  StreamChunk,
+} from './agent-client';
+
+export {
   GatewayClient,
   createGatewayClient,
 } from './gateway-client';
 
 export type {
   GatewayConfig,
-  InvokeRequest,
-  InvokeResponse,
   AgentTrace,
   AgentReasoning,
-  StreamChunk,
   AuthMethod,
   AuthConfig,
+} from './gateway-client';
+
+// Gateway-specific types (use these when working with GatewayClient)
+export type {
+  InvokeRequest as GatewayInvokeRequest,
+  InvokeResponse as GatewayInvokeResponse,
+  StreamChunk as GatewayStreamChunk,
 } from './gateway-client';
 
 export {

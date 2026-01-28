@@ -1,277 +1,175 @@
-# x402 AWS Enterprise Demo - Quick Start Guide
+# Quick Start
 
 Get the x402 payment demo running in under 30 minutes.
 
 ## Prerequisites
 
-Before you begin, ensure you have:
-
-| Requirement | Version | Check Command |
-|-------------|---------|---------------|
+| Requirement | Version | Check |
+|-------------|---------|-------|
 | Node.js | 18+ | `node --version` |
 | Python | 3.10+ | `python3 --version` |
 | AWS CLI | 2.x | `aws --version` |
-| AWS CDK | 2.x | `cdk --version` (or install via npm) |
+| AWS CDK | 2.x | `cdk --version` |
 
-You'll also need:
-- AWS account with Bedrock access enabled
-- [Coinbase Developer Platform](https://portal.cdp.coinbase.com/) account and API keys
+Also required:
+- AWS account with Bedrock AgentCore access
+- [Coinbase Developer Platform](https://portal.cdp.coinbase.com/) API keys
 
-## Quick Demo (No AWS Required)
+## Demo Mode (No AWS)
 
-Want to see the UI without deploying anything? The Web UI has a demo mode:
+Run the Web UI in demo mode without deploying anything:
 
 ```bash
-# Clone the repository
 git clone https://github.com/joshuamarksmith/x402-agentcore-demo.git
-cd x402-agentcore-demo
-
-# Run the Web UI
-cd web-ui
+cd x402-agentcore-demo/web-ui
 npm install
 npm run dev
-
 # Open http://localhost:5173
 ```
 
-This simulates the entire x402 payment flow with realistic delays and AI reasoning visualization.
+## Full Deployment
 
-## Full Setup
-
-### Step 1: Clone and Setup (5 min)
+### Step 1: Clone (2 min)
 
 ```bash
-# Clone the repository
 git clone https://github.com/joshuamarksmith/x402-agentcore-demo.git
 cd x402-agentcore-demo
 
-# Clone required dependencies (gitignored)
 git clone https://github.com/coinbase/x402.git
 git clone https://github.com/coinbase/agentkit.git
 
-# Run the setup script
 ./scripts/setup.sh
 ```
 
-The setup script will:
-- Verify prerequisites
-- Create Python virtual environment
-- Install all dependencies
-- Build the Web UI
-- Create `.env` files from examples
+### Step 2: Configure Credentials (5 min)
 
-## Step 2: Configure Credentials (5 min)
-
-### AWS Credentials
-
-Ensure your AWS CLI is configured:
-
+**AWS:**
 ```bash
 aws configure
-# Or use SSO:
-aws sso login --profile your-profile
-```
-
-Verify access:
-```bash
 aws sts get-caller-identity
 ```
 
-### Coinbase Developer Platform (CDP) Credentials
+**CDP (Coinbase):**
 
-1. Go to [CDP Portal](https://portal.cdp.coinbase.com/)
-2. Create a new API key with wallet permissions
-3. Edit `payer-agent/.env`:
+Get API keys from [CDP Portal](https://portal.cdp.coinbase.com/), then edit `payer-agent/.env`:
 
 ```bash
-# Required CDP credentials
-CDP_API_KEY_ID=your_cdp_api_key_id
-CDP_API_KEY_SECRET=your_cdp_api_key_secret
-CDP_WALLET_SECRET=your_cdp_wallet_secret
-
-# Network (testnet)
+CDP_API_KEY_NAME=your_key_name
+CDP_API_KEY_PRIVATE_KEY=your_private_key
+CDP_WALLET_SECRET=your_wallet_secret
 NETWORK_ID=base-sepolia
 ```
 
-### Seller Configuration
+**Seller:**
 
 Edit `seller-infrastructure/.env`:
-
 ```bash
 AWS_ACCOUNT_ID=123456789012
 AWS_REGION=us-east-1
 PAYMENT_RECIPIENT_ADDRESS=0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb
 ```
 
-## Step 3: Deploy Seller Infrastructure (10 min)
-
-The seller infrastructure creates a CloudFront distribution with Lambda@Edge for payment verification.
+### Step 3: Deploy Seller (10 min)
 
 ```bash
 cd seller-infrastructure
-
-# Bootstrap CDK (first time only)
-npx cdk bootstrap
-
-# Deploy the stack
+npx cdk bootstrap  # first time only
 npx cdk deploy
-
-# Note the CloudFront URL from the output:
-# SellerInfrastructureStack.CloudFrontURL = https://d1234567890.cloudfront.net
 ```
 
-Update `payer-agent/.env` with the CloudFront URL:
+Note the CloudFront URL from output:
+```
+X402SellerStack.X402DistributionUrl = https://dXXXXXXXXXXXXX.cloudfront.net
+```
+
+### Step 4: Deploy Payer (10 min)
+
 ```bash
-SELLER_API_URL=https://d1234567890.cloudfront.net
+cd payer-infrastructure
+export X402_SELLER_CLOUDFRONT_URL=https://dXXXXXXXXXXXXX.cloudfront.net
+npx cdk bootstrap  # first time only
+npx cdk deploy
 ```
 
-## Step 4: Test the Payer Agent Locally (5 min)
+### Step 5: Deploy Agent
 
 ```bash
 cd payer-agent
+source .venv/bin/activate
+python scripts/deploy_to_agentcore.py
+```
 
-# Activate virtual environment
+### Step 6: Test
+
+```bash
+cd payer-agent
 source .venv/bin/activate
 
-# Run unit tests
+# Test MCP tool discovery
+python scripts/test_gateway_api.py
+
+# Invoke agent
+python scripts/invoke_gateway.py "Get me the premium article"
+
+# Run tests
 pytest tests/ -v
-
-# Test the agent interactively
-python -m agent.main
 ```
 
-Example interaction:
-```
-> Check my wallet balance
-Agent: Your wallet balance is 0.05 ETH on Base Sepolia.
-
-> Get the premium article at /api/premium-article
-Agent: I received a 402 Payment Required response. The content costs 0.001 USDC.
-       Analyzing payment... The amount is reasonable for premium content.
-       Signing payment... Payment signed successfully.
-       Retrying with payment... Content retrieved!
-       
-       [Article content here]
-       
-       Transaction hash: 0x123...
-```
-
-## Step 5: Run the Web UI (5 min)
-
-The Web UI provides a visual interface for the x402 payment flow:
+### Step 7: Web UI (Optional)
 
 ```bash
 cd web-ui
 npm run dev
-
-# Open http://localhost:5173
 ```
 
-Features:
-- **Demo Mode** (default): Simulates the entire flow without backend
-- **Live Mode**: Connects to deployed AgentCore Gateway
-
-To enable live mode, configure `web-ui/.env`:
+For live mode, configure `web-ui/.env`:
 ```bash
 VITE_GATEWAY_ENDPOINT=https://your-gateway-url
 VITE_AWS_REGION=us-west-2
 VITE_AGENT_ID=your-agent-id
 ```
 
-## Step 6: Deploy Payer Infrastructure (Optional)
+## MCP Tools
 
-For production deployment to AgentCore:
-
-```bash
-cd payer-infrastructure
-
-# Bootstrap CDK (first time only)
-npx cdk bootstrap
-
-# Deploy
-npx cdk deploy
-```
-
-Then deploy the agent to AgentCore Runtime:
-```bash
-cd payer-agent
-python scripts/deploy_to_agentcore.py
-```
-
-## Quick Test Commands
-
-```bash
-# Run all tests
-cd payer-agent && source .venv/bin/activate && pytest
-
-# Test specific scenarios
-pytest tests/test_402_response.py -v      # 402 handling
-pytest tests/test_payment_analysis.py -v  # Payment decisions
-pytest tests/test_payment_signing.py -v   # Wallet signing
-
-# Test against deployed seller (requires SELLER_API_URL)
-pytest -m integration
-```
-
-## Protected Endpoints
-
-Once deployed, these endpoints require payment:
-
-| Endpoint | Price | Description |
-|----------|-------|-------------|
-| `/api/premium-article` | 0.001 USDC | Premium article |
-| `/api/weather-data` | 0.0005 USDC | Weather data |
-| `/api/market-analysis` | 0.002 USDC | Market analysis |
-| `/api/research-report` | 0.005 USDC | Research report |
-| `/api/dataset` | 0.01 USDC | ML dataset |
-| `/api/tutorial` | 0.003 USDC | Tutorial |
+| Tool | Price (USDC) |
+|------|--------------|
+| `get_premium_article` | 0.001 |
+| `get_weather_data` | 0.0005 |
+| `get_market_analysis` | 0.002 |
+| `get_research_report` | 0.005 |
 
 ## Troubleshooting
 
-### "No module named 'strands_agents'"
+**Module not found:**
 ```bash
-cd payer-agent
-source .venv/bin/activate
-pip install -e ".[dev]"
+cd payer-agent && source .venv/bin/activate && pip install -e ".[dev]"
 ```
 
-### "AWS credentials not found"
+**AWS credentials:**
 ```bash
 aws configure
-# Or for SSO:
-aws sso login
 ```
 
-### "CDK bootstrap required"
+**CDK bootstrap:**
 ```bash
-cd seller-infrastructure  # or payer-infrastructure
 npx cdk bootstrap aws://ACCOUNT_ID/REGION
 ```
 
-### "402 Payment Required but no wallet balance"
-Request testnet tokens:
+**No wallet balance:**
 ```bash
-cd payer-agent
-source .venv/bin/activate
 python -c "from agent.tools.payment import request_faucet_funds; print(request_faucet_funds())"
 ```
 
-### Lambda@Edge deployment fails
-Lambda@Edge must be deployed to `us-east-1`. Ensure your seller-infrastructure `.env` has:
+**Lambda@Edge region:**
+Lambda@Edge requires `us-east-1`. Set in `seller-infrastructure/.env`:
 ```bash
 AWS_REGION=us-east-1
-CDK_DEFAULT_REGION=us-east-1
 ```
 
-## Next Steps
+See [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) for more.
 
-- Read the full [README.md](README.md) for detailed architecture
-- Check [payer-agent/README.md](payer-agent/README.md) for agent details
-- Review [x402 Protocol Specs](https://github.com/coinbase/x402/tree/main/specs)
+## References
 
-## Support
-
-- [x402 GitHub Issues](https://github.com/coinbase/x402/issues)
-- [AgentKit Documentation](https://docs.cdp.coinbase.com/agentkit/)
-- [Strands Agents Docs](https://strandsagents.com/)
-- [Bedrock AgentCore Docs](https://docs.aws.amazon.com/bedrock-agentcore/)
+- [README.md](README.md) - Full architecture
+- [docs/API.md](docs/API.md) - API reference
+- [x402 Protocol](https://github.com/coinbase/x402/tree/main/specs)

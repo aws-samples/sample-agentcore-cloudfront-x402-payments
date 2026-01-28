@@ -1,202 +1,165 @@
 # x402 AWS Enterprise Demo
 
-Enterprise-grade demonstration of HTTP 402 payment challenges using AWS infrastructure with Bedrock AgentCore and Coinbase AgentKit.
+HTTP 402 payment-gated content delivery using AWS Bedrock AgentCore and Coinbase AgentKit.
 
 ## Overview
 
-This project demonstrates a complete payment-gated content delivery system using the [x402 protocol](https://github.com/coinbase/x402):
+This project demonstrates a payment-gated content delivery system using the [x402 protocol](https://github.com/coinbase/x402):
 
-- **Payer Side**: AI agent using Strands Agents SDK running on AWS Bedrock AgentCore Runtime, with Coinbase AgentKit for blockchain wallet operations
-- **Seller Side**: CloudFront distribution with Lambda@Edge for x402 v2 payment verification
-- **Web UI**: React-based demo interface with real-time status updates
+- **Payer**: AI agent on Bedrock AgentCore Runtime with Coinbase AgentKit wallet
+- **Seller**: CloudFront + Lambda@Edge for x402 payment verification
+- **Web UI**: React demo interface
 
 ## Architecture
 
 ```
-┌────────────────────────────────────────────────────────────────────────────┐
-│                              PAYER SIDE                                    │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │                    Bedrock AgentCore                                │   │
-│  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌───────────┐   │   │
-│  │  │   Gateway   │  │   Runtime   │  │   Memory    │  │ Identity  │   │   │
-│  │  │  (IAM Auth) │  │  (Agent)    │  │  (Context)  │  │  (Auth)   │   │   │
-│  │  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘  └─────┬─────┘   │   │
-│  │         │                │                │               │         │   │
-│  │         └────────────────┼────────────────┼───────────────┘         │   │
-│  │                          │                │                         │   │
-│  │                    ┌─────▼─────┐    ┌─────▼─────┐                   │   │
-│  │                    │  Strands  │    │ AgentKit  │                   │   │
-│  │                    │  Agent    │◄──►│  Wallet   │                   │   │
-│  │                    │ (Python)  │    │  (CDP)    │                   │   │
-│  │                    └───────────┘    └───────────┘                   │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                    │                                       │
-│                                    │ HTTPS (x402 v2)                       │
-│                                    ▼                                       │
-└────────────────────────────────────┼───────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              PAYER SIDE                                     │
+│  ┌───────────────────────────────────────────────────────────────────────┐  │
+│  │                    Bedrock AgentCore                                  │  │
+│  │  ┌─────────────────────────────────────────────────────────────────┐  │  │
+│  │  │                    Gateway (MCP Tool Server)                    │  │  │
+│  │  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────┐  │  │  │
+│  │  │  │  IAM Auth   │  │ MCP Protocol│  │   OpenAPI Targets       │  │  │  │
+│  │  │  │  (SigV4)    │  │  Discovery  │  │   (Content Tools)       │  │  │  │
+│  │  │  └─────────────┘  └──────┬──────┘  └────────────┬────────────┘  │  │  │
+│  │  └──────────────────────────┼──────────────────────┼───────────────┘  │  │
+│  │                             │                      │                  │  │
+│  │  ┌─────────────┐  ┌─────────▼─────────┐   ┌────────▼────────┐         │  │
+│  │  │   Runtime   │  │   Strands Agent   │   │    AgentKit     │         │  │
+│  │  │  (Session)  │  │   (Python)        │   │    Wallet       │         │  │
+│  │  │             │  │                   │   │    (CDP)        │         │  │
+│  │  │             │  │  ┌─────────────┐  │   │                 │         │  │
+│  │  │             │  │  │ MCP Client  │◄─┼───┤  Payment Sign   │         │  │
+│  │  │             │  │  │ (Discovery) │  │   │  (EIP-3009)     │         │  │
+│  │  │             │  │  └─────────────┘  │   │                 │         │  │
+│  │  └─────────────┘  └───────────────────┘   └─────────────────┘         │  │
+│  └───────────────────────────────────────────────────────────────────────┘  │
+│                                    │                                        │
+│                                    │ HTTPS (x402 v2)                        │
+│                                    ▼                                        │
+└────────────────────────────────────┼────────────────────────────────────────┘
                                      │
-┌────────────────────────────────────┼───────────────────────────────────────┐
-│                              SELLER SIDE                                   │
-│                                    │                                       │
-│                          ┌─────────▼─────────┐                             │
-│                          │    CloudFront     │                             │
-│                          │   Distribution    │                             │
-│                          └─────────┬─────────┘                             │
-│                                    │                                       │
-│                          ┌─────────▼─────────┐     ┌──────────────────┐    │
-│                          │   Lambda@Edge     │────►│   x402           │    │
-│                          │ Payment Verifier  │     │   Facilitator    │    │
-│                          └─────────┬─────────┘     └──────────────────┘    │
-│                                    │                                       │
-│                    ┌───────────────┼───────────────┐                       │
-│                    │               │               │                       │
-│              ┌─────▼─────┐  ┌──────▼──────┐  ┌────▼────┐                   │
-│              │  Return   │  │   Verify    │  │  Serve  │                   │
-│              │   402     │  │   Payment   │  │ Content │                   │
-│              └───────────┘  └─────────────┘  └─────────┘                   │
-└────────────────────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────┼────────────────────────────────────────┐
+│                              SELLER SIDE                                    │
+│                                    │                                        │
+│                          ┌─────────▼─────────┐                              │
+│                          │    CloudFront     │                              │
+│                          │   Distribution    │                              │
+│                          └─────────┬─────────┘                              │
+│                                    │                                        │
+│                          ┌─────────▼─────────┐     ┌──────────────────┐     │
+│                          │   Lambda@Edge     │────►│   x402           │     │
+│                          │ Payment Verifier  │     │   Facilitator    │     │
+│                          └─────────┬─────────┘     └──────────────────┘     │
+│                                    │                                        │
+│                    ┌───────────────┼───────────────┐                        │
+│                    │               │               │                        │
+│              ┌─────▼─────┐  ┌──────▼──────┐  ┌────▼────┐                    │
+│              │  Return   │  │   Verify    │  │  Serve  │                    │
+│              │   402     │  │   Payment   │  │ Content │                    │
+│              └───────────┘  └─────────────┘  └─────────┘                    │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
+
+AgentCore Gateway acts as an MCP tool server:
+- Content endpoints exposed as discoverable MCP tools via OpenAPI spec
+- Agent discovers tools at runtime via MCP protocol
+- x402 payment headers pass through to CloudFront
+- Agent handles 402 responses and payment signing
 
 ## Payment Flow
 
-1. Client requests content from the agent
-2. Agent makes initial request to seller API
-3. Lambda@Edge returns `402 Payment Required` with x402 headers
-4. Agent analyzes payment requirements using Bedrock LLM
-5. Agent signs payment using AgentKit wallet (EIP-3009)
-6. Agent retries request with `X-PAYMENT-SIGNATURE` header
-7. Lambda@Edge verifies signature via x402 facilitator
-8. Facilitator settles payment on-chain
-9. Content is returned with transaction hash
+1. Client sends request to agent
+2. Agent discovers content tools via MCP from Gateway
+3. Agent invokes tool (routed to CloudFront)
+4. Lambda@Edge returns `402 Payment Required` with x402 headers
+5. Agent analyzes payment requirements
+6. Agent signs payment with AgentKit wallet (EIP-3009)
+7. Agent retries with `X-PAYMENT-SIGNATURE` header
+8. Lambda@Edge verifies signature via x402 facilitator
+9. Facilitator settles payment on-chain
+10. Content returned with transaction hash
 
-## Technology Stack
+## Stack
 
-| Component | Technology | Purpose |
-|-----------|------------|---------|
-| Agent Logic | [Strands Agents SDK](https://strandsagents.com/) (Python) | AI agent framework with tool calling |
-| Agent Runtime | [Amazon Bedrock AgentCore Runtime](https://docs.aws.amazon.com/bedrock-agentcore/) | Serverless agent deployment |
-| Agent API | Amazon Bedrock AgentCore Gateway | IAM SigV4 authentication |
-| LLM | Amazon Bedrock (Claude Sonnet) | Payment decision reasoning |
-| Wallet | [Coinbase AgentKit](https://docs.cdp.coinbase.com/agentkit/) | Blockchain transaction signing |
-| Content Delivery | CloudFront + Lambda@Edge | Global edge payment verification |
-| Payment Protocol | [x402](https://github.com/coinbase/x402) | HTTP 402 payment standard |
-| Network | Base Sepolia (testnet) | EVM-compatible blockchain |
-| Web UI | React + Vite + TypeScript | Demo interface |
-| Observability | CloudWatch + OpenTelemetry | Metrics, tracing, and logging |
+| Component | Technology |
+|-----------|------------|
+| Agent Framework | [Strands Agents SDK](https://strandsagents.com/) (Python) |
+| Agent Runtime | [Amazon Bedrock AgentCore](https://docs.aws.amazon.com/bedrock-agentcore/) |
+| Tool Discovery | MCP Protocol via Gateway |
+| LLM | Amazon Bedrock (Claude Sonnet) |
+| Wallet | [Coinbase AgentKit](https://docs.cdp.coinbase.com/agentkit/) |
+| Content Delivery | CloudFront + Lambda@Edge |
+| Payment Protocol | [x402](https://github.com/coinbase/x402) |
+| Network | Base Sepolia (testnet) |
+| Web UI | React + Vite + TypeScript |
 
 ## Project Structure
 
 ```
 x402-agentcore-demo/
-├── payer-agent/                  # AI Agent (Python)
-│   ├── agent/                    # Strands agent implementation
-│   │   ├── main.py               # Agent definition & system prompt
-│   │   ├── config.py             # Configuration management
-│   │   ├── tools/                # Agent tools
-│   │   │   ├── payment.py        # Payment analysis & signing
-│   │   │   └── content.py        # Content request handling
-│   │   ├── auth/                 # Authentication
-│   │   │   └── sigv4.py          # AWS SigV4 signing
-│   │   ├── gateway_client.py     # AgentCore Gateway client
-│   │   ├── tracing.py            # OpenTelemetry integration
-│   │   ├── metrics.py            # CloudWatch metrics
-│   │   └── rate_limiter.py       # Request rate limiting
-│   ├── scripts/                  # Deployment & testing scripts
-│   │   ├── deploy_to_agentcore.py
-│   │   ├── invoke_gateway.py
-│   │   └── test_gateway_api.py
-│   ├── tests/                    # Comprehensive test suite
-│   ├── agentcore_config.yaml     # AgentCore Runtime config
-│   ├── gateway_config.yaml       # AgentCore Gateway config
-│   └── pyproject.toml
+├── payer-agent/              # AI Agent (Python)
+│   ├── agent/                # Strands agent implementation
+│   ├── openapi/              # OpenAPI specs for Gateway targets
+│   ├── scripts/              # Deployment & test scripts
+│   ├── tests/                # Test suite
+│   ├── agentcore_config.yaml
+│   └── gateway_config.yaml
 │
-├── payer-infrastructure/         # AgentCore CDK Stack
+├── payer-infrastructure/     # AgentCore CDK Stack
 │   └── lib/
-│       ├── agentcore-stack.ts    # Runtime & Gateway resources
-│       └── observability-stack.ts # CloudWatch dashboards
+│       ├── agentcore-stack.ts
+│       └── observability-stack.ts
 │
-├── seller-infrastructure/        # CloudFront CDK Stack
+├── seller-infrastructure/    # CloudFront CDK Stack
 │   ├── lib/
-│   │   ├── cloudfront-stack.ts   # Distribution & Lambda@Edge
+│   │   ├── cloudfront-stack.ts
 │   │   └── lambda-edge/
-│   │       ├── payment-verifier.ts   # x402 v2 verification
-│   │       ├── content-config.ts     # Dynamic content & pricing
-│   │       └── types.ts              # x402 v2 type definitions
-│   ├── content/                  # Sample paywall content
-│   │   ├── dataset.json
-│   │   ├── research-report.json
-│   │   └── tutorial.json
-│   └── scripts/
-│       └── upload-content.sh
+│   │       └── payment-verifier.ts
+│   └── content/              # Sample content
 │
-├── web-ui/                       # React Demo Interface
-│   ├── src/
-│   │   ├── api/                  # Gateway API client
-│   │   │   ├── gateway-client.ts # AgentCore Gateway integration
-│   │   │   ├── auth.ts           # Authentication (Cognito/SigV4)
-│   │   │   └── crypto-utils.ts   # Cryptographic utilities
-│   │   ├── components/           # React components
-│   │   │   ├── ContentRequest*.tsx   # Content request flow
-│   │   │   ├── WalletDisplay.tsx     # Wallet info display
-│   │   │   ├── AgentReasoning.tsx    # AI reasoning visualization
-│   │   │   ├── RealTimeStatus.tsx    # Live event stream
-│   │   │   ├── TransactionConfirmation.tsx
-│   │   │   └── AuthStatus.tsx
-│   │   └── hooks/                # React hooks
-│   │       └── useGatewayClient.ts
-│   ├── package.json
-│   └── vite.config.ts
+├── web-ui/                   # React Demo Interface
+│   └── src/
+│       ├── api/
+│       ├── components/
+│       └── hooks/
 │
-├── docs/                         # Documentation
-│   ├── AGENTCORE.md              # AgentCore setup guide
-│   ├── API.md                    # API reference
-│   └── TROUBLESHOOTING.md        # Common issues & solutions
+├── docs/                     # Documentation
+│   ├── AGENTCORE.md
+│   ├── API.md
+│   └── TROUBLESHOOTING.md
 │
-├── scripts/                      # Setup & deployment scripts
-│   ├── setup.sh                  # Full setup script
-│   ├── setup-payer-agent.sh      # Agent setup only
-│   ├── setup-infrastructure.sh   # Infrastructure setup only
-│   └── verify-setup.sh           # Verify installation
-│
-├── x402/                         # x402 protocol (cloned)
-├── agentkit/                     # Coinbase AgentKit (cloned)
-├── QUICKSTART.md                 # Quick start guide
-└── README.md
+├── x402/                     # x402 protocol (cloned)
+└── agentkit/                 # Coinbase AgentKit (cloned)
 ```
-
-> **Note**: This project requires cloning [coinbase/x402](https://github.com/coinbase/x402) and [coinbase/agentkit](https://github.com/coinbase/agentkit) as local dependencies (see Quick Start). These are not included in this repo.
 
 ## Agent Tools
 
-The payer agent has the following capabilities:
+Built-in tools:
 
 | Tool | Description |
 |------|-------------|
-| `get_wallet_balance` | Check current wallet balance (ETH) |
-| `analyze_payment` | Analyze payment requirements and decide whether to pay |
-| `sign_payment` | Sign a payment using AgentKit wallet (EIP-3009) |
-| `request_content` | Request content from seller API |
-| `request_content_with_payment` | Retry request with signed payment |
-| `request_faucet_funds` | Request testnet tokens from CDP faucet |
-| `check_faucet_eligibility` | Check if wallet is eligible for faucet |
+| `get_wallet_balance` | Check wallet balance |
+| `analyze_payment` | Analyze payment requirements |
+| `sign_payment` | Sign payment (EIP-3009) |
+| `request_faucet_funds` | Request testnet tokens |
 
-## Protected Endpoints
+MCP tools (discovered via Gateway):
 
-| Endpoint | Price (USDC) | Description |
-|----------|--------------|-------------|
-| `/api/premium-article` | 0.001 | Premium article content |
-| `/api/weather-data` | 0.0005 | Real-time weather data |
-| `/api/market-analysis` | 0.002 | Crypto market analysis |
-| `/api/research-report` | 0.005 | Research report (S3) |
-| `/api/dataset` | 0.01 | ML dataset (S3) |
-| `/api/tutorial` | 0.003 | Smart contract tutorial |
+| Tool | Price (USDC) |
+|------|--------------|
+| `get_premium_article` | 0.001 |
+| `get_weather_data` | 0.0005 |
+| `get_market_analysis` | 0.002 |
+| `get_research_report` | 0.005 |
 
 ## Prerequisites
 
 - AWS Account with Bedrock AgentCore access
 - [Coinbase Developer Platform](https://portal.cdp.coinbase.com/) API keys
-- Node.js 18+ and Python 3.10+
-- AWS CDK CLI (`npm install -g aws-cdk`)
+- Node.js 18+, Python 3.10+
+- AWS CDK CLI
 
 ## Quick Start
 
@@ -206,7 +169,7 @@ The payer agent has the following capabilities:
 git clone https://github.com/joshuamarksmith/x402-agentcore-demo.git
 cd x402-agentcore-demo
 
-# Clone required dependencies
+# Clone dependencies
 git clone https://github.com/coinbase/x402.git
 git clone https://github.com/coinbase/agentkit.git
 ```
@@ -216,22 +179,15 @@ git clone https://github.com/coinbase/agentkit.git
 ```bash
 # Payer agent
 cp payer-agent/.env.example payer-agent/.env
-# Edit with your CDP API keys:
-# - CDP_API_KEY_NAME
-# - CDP_API_KEY_PRIVATE_KEY
-# - CDP_WALLET_SECRET
+# Set CDP_API_KEY_NAME, CDP_API_KEY_PRIVATE_KEY, CDP_WALLET_SECRET
 
 # Seller infrastructure  
 cp seller-infrastructure/.env.example seller-infrastructure/.env
-# Edit with your payment recipient address:
-# - PAYMENT_RECIPIENT_ADDRESS
+# Set PAYMENT_RECIPIENT_ADDRESS
 
-# Web UI (optional)
+# Web UI
 cp web-ui/.env.example web-ui/.env
-# Edit with your Gateway endpoint:
-# - VITE_GATEWAY_ENDPOINT
-# - VITE_AWS_REGION
-# - VITE_AGENT_ID
+# Set VITE_GATEWAY_ENDPOINT, VITE_AWS_REGION, VITE_AGENT_ID
 ```
 
 ### 3. Deploy seller infrastructure
@@ -250,12 +206,10 @@ cd payer-agent
 python -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
-
-# Deploy to AgentCore (requires AWS credentials)
 python scripts/deploy_to_agentcore.py
 ```
 
-### 5. Run the Web UI (optional)
+### 5. Run Web UI
 
 ```bash
 cd web-ui
@@ -263,81 +217,62 @@ npm install
 npm run dev
 ```
 
-The UI will be available at `http://localhost:5173`.
-
-### 6. Test the flow
+### 6. Test
 
 ```bash
-# Run unit tests
 cd payer-agent
 pytest
 
-# Test against deployed infrastructure
+# Integration tests
 SELLER_API_URL=https://your-cloudfront-url pytest -m integration
 
-# Invoke agent via Gateway
+# Invoke agent
 python scripts/invoke_gateway.py "Get me the premium article"
 ```
 
-## Web UI Features
+## Web UI
 
-The demo web interface provides:
+Features:
+- Wallet display with balance
+- Content selection
+- Payment flow visualization
+- Agent reasoning display
+- Real-time event stream
+- Transaction confirmation with block explorer links
 
-- **Wallet Display**: Shows connected wallet address and balance
-- **Content Selection**: Browse and select premium content items
-- **Payment Flow Visualization**: Step-by-step progress through the x402 flow
-- **Agent Reasoning**: Real-time display of AI agent's decision process
-- **Real-Time Status**: Live event stream with timestamps and durations
-- **Transaction Confirmation**: Detailed transaction information with block explorer links
+Supports demo mode (simulated) and live mode (real Gateway).
 
-The UI supports both demo mode (simulated flow) and live mode (real AgentCore Gateway integration).
-
-## Running Tests
+## Tests
 
 ```bash
 cd payer-agent
 source .venv/bin/activate
 
-# All tests
-pytest
-
-# Specific test categories
-pytest tests/test_402_response.py -v      # 402 response handling
-pytest tests/test_payment_analysis.py -v  # Payment decision logic
+pytest                                    # All tests
+pytest tests/test_402_response.py -v      # 402 handling
+pytest tests/test_payment_analysis.py -v  # Payment decisions
 pytest tests/test_payment_signing.py -v   # Wallet signing
 pytest tests/test_content_delivery.py -v  # Content retrieval
 pytest tests/test_error_scenarios.py -v   # Error handling
-
-# Integration tests (requires deployed infrastructure)
-SELLER_API_URL=https://xxx.cloudfront.net pytest -m integration
 ```
 
 ## Observability
 
-The system includes comprehensive observability:
-
-- **CloudWatch Dashboards**: Payment metrics, latency, error rates
-- **OpenTelemetry Tracing**: End-to-end request tracing
-- **Structured Logging**: JSON logs with request correlation
-- **EMF Metrics**: Lambda@Edge metrics in CloudWatch
-
-Key metrics tracked:
-- Payment verification latency
-- Settlement success/failure rates
-- Agent decision timing
-- Token usage per request
+- CloudWatch Dashboards
+- OpenTelemetry tracing
+- Structured JSON logging
+- EMF metrics from Lambda@Edge
 
 ## Security
 
-- **Agent Invocation**: IAM SigV4 via AgentCore Gateway
-- **Wallet Keys**: AWS Secrets Manager
-- **Payment Verification**: Cryptographic signature validation via x402 facilitator
-- **Session Isolation**: AgentCore Runtime feature
-- **CORS**: Properly configured for API access
+- IAM SigV4 authentication via AgentCore Gateway
+- Wallet keys in AWS Secrets Manager
+- Cryptographic signature validation via x402 facilitator
+- Session isolation in AgentCore Runtime
 
 ## References
 
-- [x402 Protocol Specification v2](https://github.com/coinbase/x402/tree/main/specs)
+- [x402 Protocol Specification](https://github.com/coinbase/x402/tree/main/specs)
 - [Strands Agents Documentation](https://strandsagents.com/latest/documentation/docs/)
 - [Bedrock AgentCore Documentation](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/)
 - [Coinbase AgentKit Documentation](https://docs.cdp.coinbase.com/agentkit/docs/welcome)

@@ -9,6 +9,7 @@ This guide covers common issues and their solutions when working with the x402 p
 - [Payer Agent Issues](#payer-agent-issues)
 - [Wallet & Payment Issues](#wallet--payment-issues)
 - [Seller Infrastructure Issues](#seller-infrastructure-issues)
+- [AgentCore Gateway Issues](#agentcore-gateway-issues)
 - [x402 Protocol Issues](#x402-protocol-issues)
 - [Network & Connection Issues](#network--connection-issues)
 - [Debugging Tips](#debugging-tips)
@@ -311,6 +312,390 @@ cd seller-infrastructure
 1. Check facilitator URL is correct: `https://facilitator.x402.org`
 2. Verify payment payload structure matches x402 v2 spec
 3. Check Lambda@Edge logs in CloudWatch
+
+---
+
+## AgentCore Gateway Issues
+
+### MCP Tool Discovery Fails
+
+**Cause**: Gateway MCP endpoint not responding or misconfigured.
+
+**Solution**:
+1. Verify the Gateway is deployed and running:
+```bash
+# Check Gateway status via AWS CLI
+aws bedrock-agent list-agents --query "agentSummaries[?agentName=='x402-payer-agent']"
+```
+
+2. Test the MCP discovery endpoint directly:
+```bash
+curl -X GET "https://<gateway-url>/mcp/tools" \
+  -H "Accept: application/json"
+```
+
+3. Check the OpenAPI spec is valid:
+```bash
+cd payer-agent/openapi
+npx @stoplight/spectral-cli lint content-tools.yaml
+```
+
+4. Verify `x-mcp-tool` extensions are properly formatted in the OpenAPI spec
+
+5. Check Gateway logs for spec parsing errors:
+```bash
+aws logs tail /aws/bedrock/agents/<agent-id> --follow
+```
+
+### Gateway Target Not Responding
+
+**Cause**: CloudFront distribution URL not configured or unreachable.
+
+**Solution**:
+1. Verify the `X402_SELLER_CLOUDFRONT_URL` environment variable is set:
+```bash
+echo $X402_SELLER_CLOUDFRONT_URL
+```
+
+2. Get the CloudFront URL from CDK output:
+```bash
+cd seller-infrastructure
+aws cloudformation describe-stacks --stack-name X402SellerStack \
+  --query "Stacks[0].Outputs[?ExportName=='X402DistributionUrl'].OutputValue" \
+  --output text
+```
+
+3. Test connectivity to the target:
+```bash
+curl -I "$X402_SELLER_CLOUDFRONT_URL/api/premium-article"
+```
+
+4. Check Gateway target configuration in `gateway_config.yaml`:
+```yaml
+targets:
+  content_tools:
+    target_url: "${X402_SELLER_CLOUDFRONT_URL}"
+```
+
+### x402 Headers Not Being Passed Through
+
+**Cause**: Gateway header passthrough not configured correctly.
+
+**Solution**:
+1. Verify headers are listed in `passthrough_request_headers` in `gateway_config.yaml`:
+```yaml
+authentication:
+  passthrough_request_headers:
+    - name: "X-PAYMENT-SIGNATURE"
+    - name: "X-Request-Id"
+```
+
+2. Check `forward_headers` includes x402 headers:
+```yaml
+request:
+  forward_headers:
+    - "X-PAYMENT-SIGNATURE"
+    - "PAYMENT-SIGNATURE"
+```
+
+3. Ensure response headers are exposed:
+```yaml
+response:
+  expose_headers:
+    - "X-PAYMENT-REQUIRED"
+    - "X-PAYMENT-RESPONSE"
+```
+
+4. Test header passthrough manually:
+```bash
+# Send request with payment header
+curl -v "https://<gateway-url>/api/premium-article" \
+  -H "X-PAYMENT-SIGNATURE: <base64-encoded-payment>"
+```
+
+5. Check CloudFront logs for incoming headers
+
+### 402 Responses Being Retried by Gateway
+
+**Cause**: Gateway retry configuration treating 402 as a transient error.
+
+**Solution**:
+1. Ensure 402 is in `passthrough_status_codes`:
+```yaml
+response:
+  passthrough_status_codes:
+    - 402
+    - 400
+    - 401
+```
+
+2. Verify 402 is NOT in `retry_on_status_codes`:
+```yaml
+retry:
+  retry_on_status_codes:
+    - 500
+    - 502
+    - 503
+    - 504
+  # 402 should NOT be here
+```
+
+3. Check `no_retry_status_codes` includes 402:
+```yaml
+response:
+  no_retry_status_codes:
+    - 402
+    - 400
+    - 401
+```
+
+### Gateway Rate Limiting Errors
+
+**Cause**: Too many requests hitting Gateway rate limits.
+
+**Solution**:
+1. Check current rate limit configuration:
+```yaml
+rate_limiting:
+  enabled: true
+  requests_per_second: 10
+  burst_capacity: 20
+```
+
+2. Use the built-in rate limiter in your client:
+```python
+from agent.gateway_client import GatewayClient
+
+client = GatewayClient(
+    agent_id="your-agent-id",
+    rate_limit_enabled=True,
+    rate_limit_requests_per_second=5.0,
+    rate_limit_burst_capacity=10,
+)
+```
+
+3. Check rate limit stats:
+```python
+print(client.rate_limit_stats)
+```
+
+4. If hitting server-side limits, check CloudWatch metrics:
+```bash
+aws cloudwatch get-metric-statistics \
+  --namespace "AWS/Bedrock" \
+  --metric-name "ThrottledRequests" \
+  --dimensions Name=AgentId,Value=<agent-id> \
+  --start-time $(date -u -v-1H +%Y-%m-%dT%H:%M:%SZ) \
+  --end-time $(date -u +%Y-%m-%dT%H:%M:%SZ) \
+  --period 300 \
+  --statistics Sum
+```
+
+### MCP Tool Invocation Returns Empty Response
+
+**Cause**: Tool endpoint path mapping incorrect or content not found.
+
+**Solution**:
+1. Verify the endpoint path in the OpenAPI spec matches the actual CloudFront path:
+```yaml
+paths:
+  /api/premium-article:  # Must match CloudFront path
+    get:
+      operationId: get_premium_article
+```
+
+2. Check the MCP client is constructing the correct URL:
+```python
+from agent.mcp_client import get_mcp_client
+
+client = get_mcp_client()
+tools = client.get_cached_tools()
+for tool in tools:
+    print(f"{tool.name}: {tool.endpoint_path}")
+```
+
+3. Test the endpoint directly:
+```bash
+curl -v "$X402_SELLER_CLOUDFRONT_URL/api/premium-article"
+```
+
+4. Check Lambda@Edge logs for the request:
+```bash
+aws logs tail /aws/lambda/us-east-1.PaymentVerifier --follow
+```
+
+### Gateway SigV4 Authentication Fails
+
+**Cause**: AWS credentials invalid or missing required permissions.
+
+**Solution**:
+1. Verify credentials are valid:
+```bash
+aws sts get-caller-identity
+```
+
+2. Check required IAM permissions:
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "bedrock:InvokeAgent",
+        "bedrock:InvokeAgentWithResponseStream"
+      ],
+      "Resource": "arn:aws:bedrock:*:*:agent/*"
+    }
+  ]
+}
+```
+
+3. Test authentication with the Gateway client:
+```python
+from agent.gateway_client import GatewayClient
+
+client = GatewayClient(agent_id="your-agent-id")
+if client.verify_credentials():
+    print("Credentials valid")
+    print(client.get_caller_identity())
+else:
+    print("Credentials invalid")
+```
+
+4. Check if the IAM principal is in the Gateway's allowed principals list
+
+### Gateway Target Health Check Failing
+
+**Cause**: Health check endpoint not responding or misconfigured.
+
+**Solution**:
+1. Check health check configuration:
+```yaml
+health_check:
+  enabled: true
+  method: OPTIONS
+  path: "/api/premium-article"
+  interval_seconds: 60
+```
+
+2. Test the health check endpoint manually:
+```bash
+curl -X OPTIONS "$X402_SELLER_CLOUDFRONT_URL/api/premium-article" -v
+```
+
+3. Verify CloudFront allows OPTIONS requests (check behavior settings)
+
+4. Check CloudWatch for health check metrics:
+```bash
+aws cloudwatch get-metric-statistics \
+  --namespace "X402PayerAgent/ContentTools" \
+  --metric-name "HealthCheckStatus" \
+  --start-time $(date -u -v-1H +%Y-%m-%dT%H:%M:%SZ) \
+  --end-time $(date -u +%Y-%m-%dT%H:%M:%SZ) \
+  --period 300 \
+  --statistics Average
+```
+
+### MCP Tool Cache Issues
+
+**Cause**: Stale tool definitions cached by the MCP client.
+
+**Solution**:
+1. Force refresh the tool cache:
+```python
+from agent.mcp_client import get_mcp_client
+
+client = get_mcp_client()
+response = await client.discover_tools(force_refresh=True)
+print(f"Discovered {len(response.tools)} tools")
+```
+
+2. Clear the cache manually:
+```python
+client.clear_cache()
+```
+
+3. Check cache TTL configuration:
+```python
+# Default is 300 seconds (5 minutes)
+client = MCPClient(cache_ttl_seconds=60)  # Reduce for testing
+```
+
+4. Disable caching for debugging:
+```python
+client = MCPClient(enable_caching=False)
+```
+
+### Gateway Timeout Errors
+
+**Cause**: Request taking too long or target not responding.
+
+**Solution**:
+1. Increase timeout in Gateway config:
+```yaml
+request:
+  timeout_seconds: 60  # Increase from default 30
+```
+
+2. Check target latency in CloudWatch:
+```bash
+aws cloudwatch get-metric-statistics \
+  --namespace "X402PayerAgent/ContentTools" \
+  --metric-name "TargetLatency" \
+  --start-time $(date -u -v-1H +%Y-%m-%dT%H:%M:%SZ) \
+  --end-time $(date -u +%Y-%m-%dT%H:%M:%SZ) \
+  --period 300 \
+  --statistics Average
+```
+
+3. Check Lambda@Edge execution time (max 30 seconds for viewer-request)
+
+4. Verify CloudFront origin timeout settings
+
+### Debugging Gateway Requests
+
+Enable detailed logging to troubleshoot Gateway issues:
+
+1. Enable x402-specific logging in `gateway_config.yaml`:
+```yaml
+logging:
+  enabled: true
+  log_level: DEBUG
+  log_request_headers: true
+  log_response_headers: true
+  x402_logging:
+    log_payment_required: true
+    log_payment_signature: true
+    log_payment_response: true
+    log_payment_amounts: true
+```
+
+2. Check Gateway logs:
+```bash
+aws logs tail /aws/bedrock/agents/<agent-id> --follow
+```
+
+3. Use the MCP client with tracing enabled:
+```python
+import os
+os.environ["OTEL_CONSOLE_EXPORT"] = "true"
+
+from agent.mcp_client import MCPClient
+client = MCPClient()
+response = await client.invoke_tool("get_premium_article")
+```
+
+4. Check x402 payment metrics:
+```bash
+aws cloudwatch get-metric-statistics \
+  --namespace "X402PayerAgent/ContentTools" \
+  --metric-name "PaymentRequired" \
+  --start-time $(date -u -v-1H +%Y-%m-%dT%H:%M:%SZ) \
+  --end-time $(date -u +%Y-%m-%dT%H:%M:%SZ) \
+  --period 300 \
+  --statistics Sum
+```
 
 ---
 
