@@ -13,7 +13,7 @@ class TestAgentConfig:
         """Test that default values are set correctly."""
         config = AgentConfig()
 
-        assert config.model_id == "anthropic.claude-sonnet-4-20250514-v1:0"
+        assert config.model_id == "us.anthropic.claude-3-5-sonnet-20241022-v2:0"
         assert config.aws_region == "us-west-2"
         assert config.network_id == "base-sepolia"
         assert config.cdp_api_key_name == ""
@@ -25,7 +25,7 @@ class TestAgentConfig:
         with patch.dict(os.environ, {}, clear=True):
             config = AgentConfig.from_env()
 
-            assert config.model_id == "anthropic.claude-sonnet-4-20250514-v1:0"
+            assert config.model_id == "us.anthropic.claude-3-5-sonnet-20241022-v2:0"
             assert config.aws_region == "us-west-2"
             assert config.network_id == "base-sepolia"
 

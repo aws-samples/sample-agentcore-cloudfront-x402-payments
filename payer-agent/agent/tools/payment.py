@@ -16,6 +16,23 @@ _wallet_provider: CdpEvmWalletProvider | None = None
 # Supported testnet networks for faucet
 SUPPORTED_FAUCET_NETWORKS = ["base-sepolia", "ethereum-sepolia"]
 
+# USDC contract addresses per network
+USDC_CONTRACTS = {
+    "base-sepolia": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+    "ethereum-sepolia": "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
+}
+
+# ERC-20 balanceOf ABI
+ERC20_BALANCE_OF_ABI = [
+    {
+        "constant": True,
+        "inputs": [{"name": "_owner", "type": "address"}],
+        "name": "balanceOf",
+        "outputs": [{"name": "balance", "type": "uint256"}],
+        "type": "function",
+    }
+]
+
 # Supported assets per network
 SUPPORTED_FAUCET_ASSETS = {
     "base-sepolia": ["eth", "usdc", "eurc", "cbbtc"],
@@ -31,6 +48,7 @@ def _get_wallet_provider_sync() -> CdpEvmWalletProvider:
             api_key_id=config.cdp_api_key_name,
             api_key_secret=config.cdp_api_key_private_key,
             wallet_secret=config.cdp_wallet_secret,
+            address=config.cdp_wallet_address if config.cdp_wallet_address else None,
             network_id=config.network_id,
         )
         _wallet_provider = CdpEvmWalletProvider(wallet_config)
@@ -260,10 +278,10 @@ async def sign_payment(
 @tool
 def get_wallet_balance() -> dict[str, Any]:
     """
-    Get the current wallet balance.
+    Get the current wallet balance including ETH and USDC.
 
     Returns:
-        Dictionary with wallet address, network, and balance
+        Dictionary with wallet address, network, ETH balance, and USDC balance
     """
     tracer = get_tracer()
     metrics = get_metrics_emitter()
@@ -273,29 +291,50 @@ def get_wallet_balance() -> dict[str, Any]:
             wallet_provider = _get_wallet_provider_sync()
             address = wallet_provider.get_address()
             network = wallet_provider.get_network()
+            network_id = network.network_id
             balance = wallet_provider.get_balance()
 
             # Convert from wei to ETH
             balance_eth = float(balance) / 1e18
             
             span.set_attribute("wallet.address", address)
-            span.set_attribute("wallet.network", network.network_id)
+            span.set_attribute("wallet.network", network_id)
             span.set_attribute("wallet.balance_eth", balance_eth)
+            
+            # Get USDC balance if contract exists for this network
+            usdc_balance = "0"
+            usdc_contract = USDC_CONTRACTS.get(network_id)
+            if usdc_contract:
+                try:
+                    result = wallet_provider.read_contract(
+                        contract_address=usdc_contract,
+                        abi=ERC20_BALANCE_OF_ABI,
+                        function_name="balanceOf",
+                        args=[address],
+                    )
+                    # USDC has 6 decimals
+                    usdc_balance = str(float(result) / 1e6)
+                    span.set_attribute("wallet.balance_usdc", usdc_balance)
+                except Exception as e:
+                    span.set_attribute("wallet.usdc_error", str(e))
             
             # Record wallet balance metric
             metrics.record_wallet_balance(
                 balance_eth=balance_eth,
-                network=network.network_id,
+                network=network_id,
                 address=address,
             )
 
             return {
                 "success": True,
                 "address": address,
-                "network": network.network_id,
-                "balance": str(balance_eth),
-                "balance_wei": str(balance),
-                "currency": "ETH",
+                "network": network_id,
+                "eth_balance": str(balance_eth),
+                "usdc_balance": usdc_balance,
+                "balances": {
+                    "ETH": str(balance_eth),
+                    "USDC": usdc_balance,
+                },
             }
         except Exception as e:
             span.set_attribute("error.message", str(e))

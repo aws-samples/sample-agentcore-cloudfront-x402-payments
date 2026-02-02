@@ -16,12 +16,14 @@ class AgentConfig:
     aws_region: str = "us-west-2"
     
     # Bedrock model configuration (for local development)
-    model_id: str = "anthropic.claude-sonnet-4-20250514-v1:0"
+    # Use cross-region inference profile for Claude Sonnet
+    model_id: str = "us.anthropic.claude-3-5-sonnet-20241022-v2:0"
 
     # CDP (Coinbase Developer Platform) configuration
     cdp_api_key_name: str = ""
     cdp_api_key_private_key: str = ""
     cdp_wallet_secret: str = ""
+    cdp_wallet_address: str = ""  # Optional: pin to specific wallet address
 
     # Network configuration
     network_id: str = "base-sepolia"
@@ -43,6 +45,7 @@ class AgentConfig:
             cdp_api_key_name=os.getenv("CDP_API_KEY_ID", ""),
             cdp_api_key_private_key=os.getenv("CDP_API_KEY_SECRET", ""),
             cdp_wallet_secret=os.getenv("CDP_WALLET_SECRET", ""),
+            cdp_wallet_address=os.getenv("CDP_WALLET_ADDRESS", ""),
             network_id=os.getenv("NETWORK_ID", cls.network_id),
             seller_api_url=os.getenv("SELLER_API_URL", ""),
             otel_endpoint=os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", ""),

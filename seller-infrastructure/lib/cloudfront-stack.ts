@@ -47,27 +47,20 @@ export class X402SellerStack extends cdk.Stack {
     // =========================================================================
 
     // Cache policy for payment-protected API endpoints
-    // MUST be disabled - each request requires unique payment verification
-    // The X-Payment-Signature header contains a one-time payment authorization
+    // Disabled - each request requires unique payment verification
     const paymentApiCachePolicy = new cloudfront.CachePolicy(
       this,
       'PaymentApiCachePolicy',
       {
         cachePolicyName: 'X402-PaymentApi-NoCache',
-        comment: 'No caching for x402 payment-protected endpoints - each request requires payment verification',
+        comment: 'No caching for x402 payment-protected endpoints',
         defaultTtl: cdk.Duration.seconds(0),
         minTtl: cdk.Duration.seconds(0),
         maxTtl: cdk.Duration.seconds(0),
-        // Include payment header in cache key to ensure unique requests
-        // Even though TTL is 0, this ensures proper request handling
-        headerBehavior: cloudfront.CacheHeaderBehavior.allowList(
-          'X-Payment-Signature',
-          'Payment-Signature'
-        ),
-        queryStringBehavior: cloudfront.CacheQueryStringBehavior.all(),
+        // Note: headerBehavior cannot be set when caching is disabled (TTL=0)
+        // Payment headers are forwarded via the origin request policy instead
+        queryStringBehavior: cloudfront.CacheQueryStringBehavior.none(),
         cookieBehavior: cloudfront.CacheCookieBehavior.none(),
-        enableAcceptEncodingGzip: true,
-        enableAcceptEncodingBrotli: true,
       }
     );
 
@@ -292,18 +285,9 @@ export class X402SellerStack extends cdk.Stack {
       httpVersion: cloudfront.HttpVersion.HTTP2_AND_3,
       // Price class - use all edge locations for best performance
       priceClass: cloudfront.PriceClass.PRICE_CLASS_ALL,
-      // Enable logging for debugging
-      enableLogging: true,
-      logBucket: new s3.Bucket(this, 'LogBucket', {
-        removalPolicy: cdk.RemovalPolicy.DESTROY,
-        autoDeleteObjects: true,
-        lifecycleRules: [
-          {
-            expiration: cdk.Duration.days(30),
-          },
-        ],
-      }),
-      logFilePrefix: 'cloudfront-logs/',
+      // Logging disabled for demo simplicity
+      // CloudFront standard logging requires ACL-enabled buckets
+      enableLogging: false,
     });
 
     // =========================================================================
