@@ -202,6 +202,22 @@ export class X402SellerStack extends cdk.Stack {
         compress: true,
       },
       additionalBehaviors: {
+        // MCP discovery endpoint - NO payment required, short caching
+        '/mcp/*': {
+          origin: new origins.S3Origin(contentBucket),
+          viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+          allowedMethods: cloudfront.AllowedMethods.ALLOW_GET_HEAD_OPTIONS,
+          cachedMethods: cloudfront.CachedMethods.CACHE_GET_HEAD_OPTIONS,
+          cachePolicy: publicContentCachePolicy,
+          responseHeadersPolicy: responseHeadersPolicy,
+          edgeLambdas: [
+            {
+              functionVersion: paymentVerifier.currentVersion,
+              eventType: cloudfront.LambdaEdgeEventType.VIEWER_REQUEST,
+            },
+          ],
+          compress: true,
+        },
         // Payment-protected API endpoints - NO caching
         '/api/*': {
           origin: new origins.S3Origin(contentBucket),

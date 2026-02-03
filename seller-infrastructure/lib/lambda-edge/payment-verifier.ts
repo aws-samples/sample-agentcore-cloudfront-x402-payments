@@ -524,6 +524,87 @@ function createErrorResponse(
   };
 }
 
+/**
+ * Creates MCP tool discovery response
+ * Returns all available services with their pricing and metadata
+ */
+function createMCPDiscoveryResponse(requestId: string): CloudFrontRequestResult {
+  const tools = [];
+  
+  // Get all content items from the registry
+  const paths = contentManager.listContentPaths();
+  
+  for (const path of paths) {
+    const item = contentManager.getContentItem(path);
+    if (!item) continue;
+    
+    // Convert path to tool name: /api/premium-article -> get_premium_article
+    const toolName = 'get_' + path.replace('/api/', '').replace(/-/g, '_');
+    
+    // Calculate display price (USDC has 6 decimals)
+    const amountUnits = parseInt(item.pricing.amount, 10);
+    const displayPrice = (amountUnits / 1000000).toFixed(6).replace(/\.?0+$/, '');
+    
+    tools.push({
+      tool_name: toolName,
+      tool_description: `${item.description}. Requires x402 payment: ${item.pricing.amount} USDC units (${displayPrice} USDC) on Base Sepolia testnet.`,
+      operation_id: toolName,
+      endpoint_path: path,
+      mcp_metadata: {
+        category: path.includes('market') || path.includes('weather') ? 'market-data' : 
+                  path.includes('research') || path.includes('dataset') ? 'research' : 'content',
+        tags: ['x402-payment', 'premium-content'],
+        priority: 1,
+        requires_payment: true,
+        estimated_latency_ms: 2000,
+      },
+      x402_metadata: {
+        price_usdc_units: item.pricing.amount,
+        price_usdc_display: `${displayPrice} USDC`,
+        network: item.pricing.network,
+        network_name: 'Base Sepolia',
+        scheme: item.pricing.scheme,
+        asset_address: item.pricing.asset,
+        asset_name: 'USDC',
+        timeout_seconds: item.pricing.maxTimeoutSeconds,
+      },
+      input_schema: {
+        type: 'object',
+        properties: {},
+        required: [],
+        description: 'No input parameters required. Payment is handled via x402 headers.',
+      },
+    });
+  }
+  
+  const response = {
+    version: '1.0',
+    tools,
+    metadata: {
+      gateway: 'x402-seller-gateway',
+      protocol: 'x402-v2',
+      network: 'base-sepolia',
+      total_services: tools.length,
+    },
+  };
+  
+  return {
+    status: '200',
+    statusDescription: 'OK',
+    headers: {
+      'content-type': [{ key: 'Content-Type', value: 'application/json' }],
+      'x-request-id': [{ key: 'X-Request-Id', value: requestId }],
+      'access-control-allow-origin': [{ key: 'Access-Control-Allow-Origin', value: '*' }],
+      'access-control-allow-headers': [{ 
+        key: 'Access-Control-Allow-Headers', 
+        value: 'Content-Type, Accept' 
+      }],
+      'cache-control': [{ key: 'Cache-Control', value: 'public, max-age=300' }],
+    },
+    body: JSON.stringify(response),
+  };
+}
+
 export const handler = async (
   event: CloudFrontRequestEvent
 ): Promise<CloudFrontRequestResult> => {
@@ -539,6 +620,14 @@ export const handler = async (
   logger.info('Processing request', { method: request.method });
 
   try {
+    // Handle MCP discovery endpoint (no payment required)
+    if (uri === '/mcp/tools') {
+      logger.info('MCP discovery request');
+      logger.recordMetric(MetricName.LATENCY, logger.getElapsedMs());
+      logger.emitMetrics();
+      return createMCPDiscoveryResponse(requestId);
+    }
+    
     // Check if this path requires payment using dynamic content manager
     const paymentRequirement = contentManager.getPaymentRequirements(uri);
     

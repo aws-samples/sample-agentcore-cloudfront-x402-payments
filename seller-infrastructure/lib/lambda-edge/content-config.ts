@@ -69,7 +69,7 @@ export interface ContentRegistry {
  * Default payment recipient address
  * Can be overridden via PAYMENT_RECIPIENT environment variable
  */
-const DEFAULT_PAY_TO = process.env.PAYMENT_RECIPIENT || '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb';
+const DEFAULT_PAY_TO = process.env.PAYMENT_RECIPIENT || '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEbE';
 
 /**
  * Default network (Base Sepolia testnet)
