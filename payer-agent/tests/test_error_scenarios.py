@@ -451,8 +451,7 @@ class TestRateLimitingErrors:
 class TestWalletAndSigningErrors:
     """Tests for wallet and signing error scenarios."""
 
-    @pytest.mark.asyncio
-    async def test_wallet_not_initialized(self):
+    def test_wallet_not_initialized(self):
         """Test handling when wallet provider is not initialized."""
         mock_provider = MagicMock()
         mock_provider.get_address.side_effect = Exception("Wallet not initialized")
@@ -460,18 +459,17 @@ class TestWalletAndSigningErrors:
         with patch("agent.tools.payment._get_wallet_provider_sync", return_value=mock_provider):
             from agent.tools.payment import sign_payment
             
-            result = await sign_payment(
+            result = sign_payment(
                 scheme="exact",
                 network="base-sepolia",
-                amount="0.001",
+                amount="1000",
                 recipient=SAMPLE_RECIPIENT_ADDRESS,
             )
             
             assert result["success"] is False
             assert "error" in result
 
-    @pytest.mark.asyncio
-    async def test_wallet_locked(self):
+    def test_wallet_locked(self):
         """Test handling when wallet is locked."""
         mock_provider = MagicMock()
         mock_provider.get_address.side_effect = Exception("Wallet is locked")
@@ -479,38 +477,37 @@ class TestWalletAndSigningErrors:
         with patch("agent.tools.payment._get_wallet_provider_sync", return_value=mock_provider):
             from agent.tools.payment import sign_payment
             
-            result = await sign_payment(
+            result = sign_payment(
                 scheme="exact",
                 network="base-sepolia",
-                amount="0.001",
+                amount="1000",
                 recipient=SAMPLE_RECIPIENT_ADDRESS,
             )
             
             assert result["success"] is False
             assert "locked" in result["error"].lower()
 
-    @pytest.mark.asyncio
-    async def test_signing_rejected_by_user(self):
+    def test_signing_rejected_by_user(self):
         """Test handling when user rejects signing request."""
         mock_provider = MagicMock()
         mock_provider.get_address.return_value = SAMPLE_PAYER_ADDRESS
+        mock_provider.sign_typed_data.side_effect = Exception("User rejected signing request")
         mock_provider.sign_message.side_effect = Exception("User rejected signing request")
         
         with patch("agent.tools.payment._get_wallet_provider_sync", return_value=mock_provider):
             from agent.tools.payment import sign_payment
             
-            result = await sign_payment(
+            result = sign_payment(
                 scheme="exact",
                 network="base-sepolia",
-                amount="0.001",
+                amount="1000",
                 recipient=SAMPLE_RECIPIENT_ADDRESS,
             )
             
             assert result["success"] is False
             assert "rejected" in result["error"].lower()
 
-    @pytest.mark.asyncio
-    async def test_invalid_private_key(self):
+    def test_invalid_private_key(self):
         """Test handling of invalid private key."""
         mock_provider = MagicMock()
         mock_provider.get_address.side_effect = Exception("Invalid private key format")
@@ -518,10 +515,10 @@ class TestWalletAndSigningErrors:
         with patch("agent.tools.payment._get_wallet_provider_sync", return_value=mock_provider):
             from agent.tools.payment import sign_payment
             
-            result = await sign_payment(
+            result = sign_payment(
                 scheme="exact",
                 network="base-sepolia",
-                amount="0.001",
+                amount="1000",
                 recipient=SAMPLE_RECIPIENT_ADDRESS,
             )
             

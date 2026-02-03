@@ -136,24 +136,15 @@ This will:
 
 Current Runtime ARN:
 ```
-arn:aws:bedrock-agentcore:us-west-2:633890776779:runtime/x402PayerAgent-9R4MXKAf4E
+arn:aws:bedrock-agentcore:us-west-2:633890776779:runtime/x402PayerAgent-ZRET5yCgTk
 ```
 
 ### Test Invocation
 
 ```bash
-python -c "
-import boto3
-import json
-
-client = boto3.client('bedrock-agentcore', region_name='us-west-2')
-response = client.invoke_agent_runtime(
-    agentRuntimeArn='arn:aws:bedrock-agentcore:us-west-2:633890776779:runtime/x402PayerAgent-9R4MXKAf4E',
-    payload=json.dumps({'message': 'What is your wallet balance?'}).encode('utf-8'),
-)
-result = response.get('response').read()
-print(json.loads(result.decode())['response'])
-"
+python scripts/test_agent_invocation.py \
+    --runtime-arn "arn:aws:bedrock-agentcore:us-west-2:633890776779:runtime/x402PayerAgent-ZRET5yCgTk" \
+    --message "What services are available?"
 ```
 
 ## Configuration

@@ -1,6 +1,7 @@
 """Payment-related tools for the x402 payer agent."""
 
 import json
+import secrets
 import sys
 import time
 from typing import Any, Literal
@@ -42,6 +43,32 @@ SUPPORTED_FAUCET_NETWORKS = ["base-sepolia", "ethereum-sepolia"]
 USDC_CONTRACTS = {
     "base-sepolia": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
     "ethereum-sepolia": "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
+}
+
+# Network to chain ID mapping (CAIP-2 format: eip155:chainId)
+NETWORK_TO_CHAIN_ID = {
+    "base-sepolia": "84532",
+    "base": "8453",
+    "eip155:84532": "84532",
+    "eip155:8453": "8453",
+}
+
+# Token info for EIP-712 domain
+TOKEN_INFO = {
+    "84532": {  # Base Sepolia
+        "0x036CbD53842c5426634e7929541eC2318f3dCF7e": {
+            "name": "USDC",
+            "version": "2",
+            "decimals": 6,
+        }
+    },
+    "8453": {  # Base Mainnet
+        "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913": {
+            "name": "USD Coin",
+            "version": "2",
+            "decimals": 6,
+        }
+    },
 }
 
 # ERC-20 balanceOf ABI
@@ -205,23 +232,29 @@ def analyze_payment(
 
 
 @tool
-async def sign_payment(
+def sign_payment(
     scheme: str,
     network: str,
     amount: str,
     recipient: str,
+    asset: str = "",
+    max_timeout_seconds: int = 60,
 ) -> dict[str, Any]:
     """
-    Sign a payment using the AgentKit wallet.
+    Sign a payment using the AgentKit wallet for x402 v2 protocol.
+
+    Creates an EIP-3009 TransferWithAuthorization signature for USDC transfers.
 
     Args:
         scheme: Payment scheme (e.g., "exact")
-        network: Blockchain network (e.g., "base-sepolia")
-        amount: Payment amount
-        recipient: Recipient wallet address
+        network: Blockchain network in CAIP-2 format (e.g., "eip155:84532" or "base-sepolia")
+        amount: Payment amount in atomic units (e.g., "2000" for 0.002 USDC)
+        recipient: Recipient wallet address (payTo)
+        asset: Token contract address (optional, defaults to USDC for network)
+        max_timeout_seconds: Maximum time for payment validity (default 60)
 
     Returns:
-        Signed payment payload ready for x402 header
+        Signed x402 v2 payment payload ready for x-payment header
     """
     tracer = get_tracer()
     metrics = get_metrics_emitter()
@@ -241,22 +274,96 @@ async def sign_payment(
             address = wallet_provider.get_address()
             span.set_attribute("wallet.address", address)
 
-            timestamp = int(time.time() * 1000)
-
-            # Create the payment message
-            message = json.dumps({
-                "scheme": scheme,
-                "network": network,
-                "from": address,
-                "to": recipient,
-                "amount": amount,
-                "timestamp": timestamp,
-            })
-
-            # Sign the message
-            signature = wallet_provider.sign_message(message)
+            # Get chain ID from network
+            chain_id = NETWORK_TO_CHAIN_ID.get(network)
+            if not chain_id:
+                # Try to extract from CAIP-2 format (eip155:chainId)
+                if network.startswith("eip155:"):
+                    chain_id = network.split(":")[1]
+                else:
+                    return {
+                        "success": False,
+                        "error": f"Unsupported network: {network}",
+                    }
+            
+            # Get asset address (default to USDC)
+            if not asset:
+                network_key = "base-sepolia" if chain_id == "84532" else "base"
+                asset = USDC_CONTRACTS.get(network_key, USDC_CONTRACTS["base-sepolia"])
+            
+            # Get token info for EIP-712 domain
+            token_info = TOKEN_INFO.get(chain_id, {}).get(asset.lower()) or TOKEN_INFO.get(chain_id, {}).get(asset)
+            if not token_info:
+                # Default to USDC info
+                token_info = {"name": "USDC", "version": "2", "decimals": 6}
+            
+            # Create nonce (32 random bytes as hex string)
+            nonce_bytes = secrets.token_bytes(32)
+            nonce_hex = f"0x{nonce_bytes.hex()}"
+            
+            # Create time window
+            now = int(time.time())
+            valid_after = str(now - 60)  # Valid from 60 seconds ago
+            valid_before = str(now + max_timeout_seconds)
+            
+            # Create EIP-712 typed data for TransferWithAuthorization
+            typed_data = {
+                "types": {
+                    "EIP712Domain": [
+                        {"name": "name", "type": "string"},
+                        {"name": "version", "type": "string"},
+                        {"name": "chainId", "type": "uint256"},
+                        {"name": "verifyingContract", "type": "address"},
+                    ],
+                    "TransferWithAuthorization": [
+                        {"name": "from", "type": "address"},
+                        {"name": "to", "type": "address"},
+                        {"name": "value", "type": "uint256"},
+                        {"name": "validAfter", "type": "uint256"},
+                        {"name": "validBefore", "type": "uint256"},
+                        {"name": "nonce", "type": "bytes32"},
+                    ],
+                },
+                "primaryType": "TransferWithAuthorization",
+                "domain": {
+                    "name": token_info["name"],
+                    "version": token_info["version"],
+                    "chainId": int(chain_id),
+                    "verifyingContract": asset,
+                },
+                "message": {
+                    "from": address,
+                    "to": recipient,
+                    "value": int(amount),
+                    "validAfter": int(valid_after),
+                    "validBefore": int(valid_before),
+                    "nonce": nonce_hex,  # Use hex string for CDP API
+                },
+            }
+            
+            # Sign the typed data using CDP wallet
+            # The CDP wallet provider uses sign_typed_data for EIP-712
+            try:
+                signature = wallet_provider.sign_typed_data(typed_data)
+            except AttributeError:
+                # Fallback: sign as message if typed data not supported
+                message = json.dumps({
+                    "from": address,
+                    "to": recipient,
+                    "value": amount,
+                    "validAfter": valid_after,
+                    "validBefore": valid_before,
+                    "nonce": nonce_hex,
+                })
+                signature = wallet_provider.sign_message(message)
+            
+            # Ensure signature has 0x prefix
+            if not signature.startswith("0x"):
+                signature = f"0x{signature}"
+            
             span.set_attribute("payment.signed", True)
-            span.set_attribute("payment.timestamp", timestamp)
+            span.set_attribute("payment.valid_after", valid_after)
+            span.set_attribute("payment.valid_before", valid_before)
             
             latency_ms = (time.time() - start_time) * 1000
             metrics.record_payment_signing(
@@ -266,17 +373,38 @@ async def sign_payment(
                 amount=amount,
             )
 
+            # Create x402 v2 payment payload
+            # The "accepted" field should contain the payment requirements we're accepting
+            payment_payload = {
+                "x402Version": 2,
+                "accepted": {
+                    "scheme": scheme,
+                    "network": f"eip155:{chain_id}" if not network.startswith("eip155:") else network,
+                    "amount": amount,
+                    "asset": asset,
+                    "payTo": recipient,
+                    "maxTimeoutSeconds": max_timeout_seconds,
+                    "extra": {
+                        "name": token_info["name"],
+                        "version": token_info["version"],
+                    },
+                },
+                "payload": {
+                    "signature": signature,
+                    "authorization": {
+                        "from": address,
+                        "to": recipient,
+                        "value": amount,
+                        "validAfter": valid_after,
+                        "validBefore": valid_before,
+                        "nonce": nonce_hex,
+                    },
+                },
+            }
+
             return {
                 "success": True,
-                "payload": {
-                    "scheme": scheme,
-                    "network": network,
-                    "signature": signature,
-                    "from": address,
-                    "to": recipient,
-                    "amount": amount,
-                    "timestamp": timestamp,
-                },
+                "payload": payment_payload,
             }
         except Exception as e:
             span.set_attribute("payment.signed", False)

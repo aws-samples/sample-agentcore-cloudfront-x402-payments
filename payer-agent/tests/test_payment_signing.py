@@ -2,17 +2,16 @@
 Tests for payment signing functionality.
 
 These tests verify that the sign_payment tool:
-1. Creates properly structured payment payloads
-2. Signs messages using the wallet provider
+1. Creates properly structured payment payloads for x402 v2
+2. Signs messages using EIP-712 typed data
 3. Handles errors gracefully
-4. Returns correct payload format for x402 protocol
+4. Returns correct payload format for x402 v2 protocol
 """
 
-import asyncio
 import json
 import time
 from typing import Any
-from unittest.mock import MagicMock, patch, AsyncMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -24,6 +23,7 @@ import pytest
 MOCK_WALLET_ADDRESS = "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb0"
 MOCK_RECIPIENT_ADDRESS = "0x1234567890123456789012345678901234567890"
 MOCK_SIGNATURE = "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890ab"
+MOCK_USDC_ADDRESS = "0x036CbD53842c5426634e7929541eC2318f3dCF7e"
 
 
 def create_mock_wallet_provider(
@@ -34,6 +34,7 @@ def create_mock_wallet_provider(
     mock_provider = MagicMock()
     mock_provider.get_address.return_value = address
     mock_provider.sign_message.return_value = signature
+    mock_provider.sign_typed_data.return_value = signature
     return mock_provider
 
 
@@ -44,223 +45,167 @@ def create_mock_wallet_provider(
 class TestSignPaymentPayloadStructure:
     """Tests for the structure of signed payment payloads."""
 
-    @pytest.mark.asyncio
-    async def test_sign_payment_returns_success_with_valid_inputs(self):
+    def test_sign_payment_returns_success_with_valid_inputs(self):
         """Test that sign_payment returns success with valid inputs."""
         mock_provider = create_mock_wallet_provider()
         
         with patch("agent.tools.payment._get_wallet_provider_sync", return_value=mock_provider):
             from agent.tools.payment import sign_payment
             
-            result = await sign_payment(
+            result = sign_payment(
                 scheme="exact",
                 network="base-sepolia",
-                amount="0.001",
+                amount="1000",  # atomic units
                 recipient=MOCK_RECIPIENT_ADDRESS,
             )
             
             assert result["success"] is True
             assert "payload" in result
 
-    @pytest.mark.asyncio
-    async def test_sign_payment_payload_contains_scheme(self):
-        """Test that signed payload contains the payment scheme."""
+    def test_sign_payment_payload_contains_x402_version(self):
+        """Test that signed payload contains x402 version 2."""
         mock_provider = create_mock_wallet_provider()
         
         with patch("agent.tools.payment._get_wallet_provider_sync", return_value=mock_provider):
             from agent.tools.payment import sign_payment
             
-            result = await sign_payment(
+            result = sign_payment(
                 scheme="exact",
                 network="base-sepolia",
-                amount="0.001",
+                amount="1000",
                 recipient=MOCK_RECIPIENT_ADDRESS,
             )
             
-            assert result["payload"]["scheme"] == "exact"
+            assert result["payload"]["x402Version"] == 2
 
-    @pytest.mark.asyncio
-    async def test_sign_payment_payload_contains_network(self):
-        """Test that signed payload contains the network."""
+    def test_sign_payment_payload_contains_accepted_field(self):
+        """Test that signed payload contains the accepted field with payment requirements."""
         mock_provider = create_mock_wallet_provider()
         
         with patch("agent.tools.payment._get_wallet_provider_sync", return_value=mock_provider):
             from agent.tools.payment import sign_payment
             
-            result = await sign_payment(
+            result = sign_payment(
                 scheme="exact",
                 network="base-sepolia",
-                amount="0.001",
+                amount="1000",
                 recipient=MOCK_RECIPIENT_ADDRESS,
             )
             
-            assert result["payload"]["network"] == "base-sepolia"
+            accepted = result["payload"]["accepted"]
+            assert accepted["scheme"] == "exact"
+            assert "network" in accepted
+            assert accepted["amount"] == "1000"
+            assert accepted["payTo"] == MOCK_RECIPIENT_ADDRESS
 
-    @pytest.mark.asyncio
-    async def test_sign_payment_payload_contains_signature(self):
-        """Test that signed payload contains a signature."""
+    def test_sign_payment_payload_contains_signature(self):
+        """Test that signed payload contains a signature in the payload field."""
         mock_provider = create_mock_wallet_provider()
         
         with patch("agent.tools.payment._get_wallet_provider_sync", return_value=mock_provider):
             from agent.tools.payment import sign_payment
             
-            result = await sign_payment(
+            result = sign_payment(
                 scheme="exact",
                 network="base-sepolia",
-                amount="0.001",
+                amount="1000",
                 recipient=MOCK_RECIPIENT_ADDRESS,
             )
             
-            assert "signature" in result["payload"]
-            assert result["payload"]["signature"] == MOCK_SIGNATURE
+            assert "payload" in result["payload"]
+            assert "signature" in result["payload"]["payload"]
+            assert result["payload"]["payload"]["signature"] == MOCK_SIGNATURE
 
-    @pytest.mark.asyncio
-    async def test_sign_payment_payload_contains_from_address(self):
-        """Test that signed payload contains the sender address."""
+    def test_sign_payment_payload_contains_authorization(self):
+        """Test that signed payload contains authorization details."""
         mock_provider = create_mock_wallet_provider()
         
         with patch("agent.tools.payment._get_wallet_provider_sync", return_value=mock_provider):
             from agent.tools.payment import sign_payment
             
-            result = await sign_payment(
+            result = sign_payment(
                 scheme="exact",
                 network="base-sepolia",
-                amount="0.001",
+                amount="1000",
                 recipient=MOCK_RECIPIENT_ADDRESS,
             )
             
-            assert result["payload"]["from"] == MOCK_WALLET_ADDRESS
-
-    @pytest.mark.asyncio
-    async def test_sign_payment_payload_contains_to_address(self):
-        """Test that signed payload contains the recipient address."""
-        mock_provider = create_mock_wallet_provider()
-        
-        with patch("agent.tools.payment._get_wallet_provider_sync", return_value=mock_provider):
-            from agent.tools.payment import sign_payment
-            
-            result = await sign_payment(
-                scheme="exact",
-                network="base-sepolia",
-                amount="0.001",
-                recipient=MOCK_RECIPIENT_ADDRESS,
-            )
-            
-            assert result["payload"]["to"] == MOCK_RECIPIENT_ADDRESS
-
-    @pytest.mark.asyncio
-    async def test_sign_payment_payload_contains_amount(self):
-        """Test that signed payload contains the payment amount."""
-        mock_provider = create_mock_wallet_provider()
-        
-        with patch("agent.tools.payment._get_wallet_provider_sync", return_value=mock_provider):
-            from agent.tools.payment import sign_payment
-            
-            result = await sign_payment(
-                scheme="exact",
-                network="base-sepolia",
-                amount="0.001",
-                recipient=MOCK_RECIPIENT_ADDRESS,
-            )
-            
-            assert result["payload"]["amount"] == "0.001"
-
-    @pytest.mark.asyncio
-    async def test_sign_payment_payload_contains_timestamp(self):
-        """Test that signed payload contains a timestamp."""
-        mock_provider = create_mock_wallet_provider()
-        
-        with patch("agent.tools.payment._get_wallet_provider_sync", return_value=mock_provider):
-            from agent.tools.payment import sign_payment
-            
-            before_time = int(time.time() * 1000)
-            result = await sign_payment(
-                scheme="exact",
-                network="base-sepolia",
-                amount="0.001",
-                recipient=MOCK_RECIPIENT_ADDRESS,
-            )
-            after_time = int(time.time() * 1000)
-            
-            assert "timestamp" in result["payload"]
-            assert before_time <= result["payload"]["timestamp"] <= after_time
+            auth = result["payload"]["payload"]["authorization"]
+            assert auth["from"] == MOCK_WALLET_ADDRESS
+            assert auth["to"] == MOCK_RECIPIENT_ADDRESS
+            assert auth["value"] == "1000"
+            assert "validAfter" in auth
+            assert "validBefore" in auth
+            assert "nonce" in auth
 
 
 class TestSignPaymentMessageSigning:
     """Tests for the message signing process."""
 
-    @pytest.mark.asyncio
-    async def test_sign_payment_calls_wallet_sign_message(self):
-        """Test that sign_payment calls the wallet's sign_message method."""
+    def test_sign_payment_calls_wallet_sign_typed_data(self):
+        """Test that sign_payment calls the wallet's sign_typed_data method."""
         mock_provider = create_mock_wallet_provider()
         
         with patch("agent.tools.payment._get_wallet_provider_sync", return_value=mock_provider):
             from agent.tools.payment import sign_payment
             
-            await sign_payment(
+            sign_payment(
                 scheme="exact",
                 network="base-sepolia",
-                amount="0.001",
+                amount="1000",
                 recipient=MOCK_RECIPIENT_ADDRESS,
             )
             
+            mock_provider.sign_typed_data.assert_called_once()
+
+    def test_sign_payment_typed_data_has_eip712_structure(self):
+        """Test that the typed data has proper EIP-712 structure."""
+        mock_provider = create_mock_wallet_provider()
+        
+        with patch("agent.tools.payment._get_wallet_provider_sync", return_value=mock_provider):
+            from agent.tools.payment import sign_payment
+            
+            sign_payment(
+                scheme="exact",
+                network="base-sepolia",
+                amount="1000",
+                recipient=MOCK_RECIPIENT_ADDRESS,
+            )
+            
+            # Get the typed data that was signed
+            call_args = mock_provider.sign_typed_data.call_args
+            typed_data = call_args[0][0]
+            
+            # Should have EIP-712 structure
+            assert "types" in typed_data
+            assert "primaryType" in typed_data
+            assert "domain" in typed_data
+            assert "message" in typed_data
+            assert typed_data["primaryType"] == "TransferWithAuthorization"
+
+    def test_sign_payment_falls_back_to_sign_message(self):
+        """Test that sign_payment falls back to sign_message if sign_typed_data fails."""
+        mock_provider = create_mock_wallet_provider()
+        mock_provider.sign_typed_data.side_effect = AttributeError("No sign_typed_data")
+        
+        with patch("agent.tools.payment._get_wallet_provider_sync", return_value=mock_provider):
+            from agent.tools.payment import sign_payment
+            
+            result = sign_payment(
+                scheme="exact",
+                network="base-sepolia",
+                amount="1000",
+                recipient=MOCK_RECIPIENT_ADDRESS,
+            )
+            
+            assert result["success"] is True
             mock_provider.sign_message.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_sign_payment_message_is_json(self):
-        """Test that the signed message is valid JSON."""
-        mock_provider = create_mock_wallet_provider()
-        
-        with patch("agent.tools.payment._get_wallet_provider_sync", return_value=mock_provider):
-            from agent.tools.payment import sign_payment
-            
-            await sign_payment(
-                scheme="exact",
-                network="base-sepolia",
-                amount="0.001",
-                recipient=MOCK_RECIPIENT_ADDRESS,
-            )
-            
-            # Get the message that was signed
-            call_args = mock_provider.sign_message.call_args
-            signed_message = call_args[0][0]
-            
-            # Should be valid JSON
-            parsed = json.loads(signed_message)
-            assert isinstance(parsed, dict)
-
-    @pytest.mark.asyncio
-    async def test_sign_payment_message_contains_all_fields(self):
-        """Test that the signed message contains all required fields."""
-        mock_provider = create_mock_wallet_provider()
-        
-        with patch("agent.tools.payment._get_wallet_provider_sync", return_value=mock_provider):
-            from agent.tools.payment import sign_payment
-            
-            await sign_payment(
-                scheme="exact",
-                network="base-sepolia",
-                amount="0.001",
-                recipient=MOCK_RECIPIENT_ADDRESS,
-            )
-            
-            call_args = mock_provider.sign_message.call_args
-            signed_message = call_args[0][0]
-            parsed = json.loads(signed_message)
-            
-            assert "scheme" in parsed
-            assert "network" in parsed
-            assert "from" in parsed
-            assert "to" in parsed
-            assert "amount" in parsed
-            assert "timestamp" in parsed
 
 
 class TestSignPaymentErrorHandling:
     """Tests for error handling in sign_payment."""
 
-    @pytest.mark.asyncio
-    async def test_sign_payment_handles_wallet_error(self):
+    def test_sign_payment_handles_wallet_error(self):
         """Test that sign_payment handles wallet provider errors gracefully."""
         mock_provider = MagicMock()
         mock_provider.get_address.side_effect = Exception("Wallet connection failed")
@@ -268,30 +213,30 @@ class TestSignPaymentErrorHandling:
         with patch("agent.tools.payment._get_wallet_provider_sync", return_value=mock_provider):
             from agent.tools.payment import sign_payment
             
-            result = await sign_payment(
+            result = sign_payment(
                 scheme="exact",
                 network="base-sepolia",
-                amount="0.001",
+                amount="1000",
                 recipient=MOCK_RECIPIENT_ADDRESS,
             )
             
             assert result["success"] is False
             assert "error" in result
 
-    @pytest.mark.asyncio
-    async def test_sign_payment_handles_signing_error(self):
+    def test_sign_payment_handles_signing_error(self):
         """Test that sign_payment handles signing errors gracefully."""
         mock_provider = MagicMock()
         mock_provider.get_address.return_value = MOCK_WALLET_ADDRESS
+        mock_provider.sign_typed_data.side_effect = Exception("Signing failed")
         mock_provider.sign_message.side_effect = Exception("Signing failed")
         
         with patch("agent.tools.payment._get_wallet_provider_sync", return_value=mock_provider):
             from agent.tools.payment import sign_payment
             
-            result = await sign_payment(
+            result = sign_payment(
                 scheme="exact",
                 network="base-sepolia",
-                amount="0.001",
+                amount="1000",
                 recipient=MOCK_RECIPIENT_ADDRESS,
             )
             
@@ -299,135 +244,146 @@ class TestSignPaymentErrorHandling:
             assert "error" in result
             assert "Signing failed" in result["error"]
 
+    def test_sign_payment_handles_unsupported_network(self):
+        """Test that sign_payment handles unsupported networks."""
+        mock_provider = create_mock_wallet_provider()
+        
+        with patch("agent.tools.payment._get_wallet_provider_sync", return_value=mock_provider):
+            from agent.tools.payment import sign_payment
+            
+            result = sign_payment(
+                scheme="exact",
+                network="unsupported-network",
+                amount="1000",
+                recipient=MOCK_RECIPIENT_ADDRESS,
+            )
+            
+            assert result["success"] is False
+            assert "error" in result
+            assert "Unsupported network" in result["error"]
+
 
 class TestSignPaymentWithDifferentSchemes:
     """Tests for sign_payment with different payment schemes."""
 
-    @pytest.mark.asyncio
-    async def test_sign_payment_with_exact_scheme(self):
+    def test_sign_payment_with_exact_scheme(self):
         """Test signing payment with 'exact' scheme."""
         mock_provider = create_mock_wallet_provider()
         
         with patch("agent.tools.payment._get_wallet_provider_sync", return_value=mock_provider):
             from agent.tools.payment import sign_payment
             
-            result = await sign_payment(
+            result = sign_payment(
                 scheme="exact",
                 network="base-sepolia",
-                amount="0.001",
+                amount="1000",
                 recipient=MOCK_RECIPIENT_ADDRESS,
             )
             
             assert result["success"] is True
-            assert result["payload"]["scheme"] == "exact"
+            assert result["payload"]["accepted"]["scheme"] == "exact"
 
-    @pytest.mark.asyncio
-    async def test_sign_payment_with_upto_scheme(self):
+    def test_sign_payment_with_upto_scheme(self):
         """Test signing payment with 'upto' scheme."""
         mock_provider = create_mock_wallet_provider()
         
         with patch("agent.tools.payment._get_wallet_provider_sync", return_value=mock_provider):
             from agent.tools.payment import sign_payment
             
-            result = await sign_payment(
+            result = sign_payment(
                 scheme="upto",
                 network="base-sepolia",
-                amount="0.005",
+                amount="5000",
                 recipient=MOCK_RECIPIENT_ADDRESS,
             )
             
             assert result["success"] is True
-            assert result["payload"]["scheme"] == "upto"
+            assert result["payload"]["accepted"]["scheme"] == "upto"
 
 
 class TestSignPaymentWithDifferentNetworks:
     """Tests for sign_payment with different networks."""
 
-    @pytest.mark.asyncio
-    async def test_sign_payment_with_base_sepolia(self):
+    def test_sign_payment_with_base_sepolia(self):
         """Test signing payment on base-sepolia network."""
         mock_provider = create_mock_wallet_provider()
         
         with patch("agent.tools.payment._get_wallet_provider_sync", return_value=mock_provider):
             from agent.tools.payment import sign_payment
             
-            result = await sign_payment(
+            result = sign_payment(
                 scheme="exact",
                 network="base-sepolia",
-                amount="0.001",
+                amount="1000",
                 recipient=MOCK_RECIPIENT_ADDRESS,
             )
             
             assert result["success"] is True
-            assert result["payload"]["network"] == "base-sepolia"
+            assert "84532" in result["payload"]["accepted"]["network"]
 
-    @pytest.mark.asyncio
-    async def test_sign_payment_with_ethereum_sepolia(self):
-        """Test signing payment on ethereum-sepolia network."""
+    def test_sign_payment_with_caip2_format(self):
+        """Test signing payment with CAIP-2 network format."""
         mock_provider = create_mock_wallet_provider()
         
         with patch("agent.tools.payment._get_wallet_provider_sync", return_value=mock_provider):
             from agent.tools.payment import sign_payment
             
-            result = await sign_payment(
+            result = sign_payment(
                 scheme="exact",
-                network="ethereum-sepolia",
-                amount="0.001",
+                network="eip155:84532",
+                amount="1000",
                 recipient=MOCK_RECIPIENT_ADDRESS,
             )
             
             assert result["success"] is True
-            assert result["payload"]["network"] == "ethereum-sepolia"
+            assert result["payload"]["accepted"]["network"] == "eip155:84532"
 
 
 class TestSignPaymentWithDifferentAmounts:
     """Tests for sign_payment with different payment amounts."""
 
-    @pytest.mark.asyncio
-    async def test_sign_payment_with_small_amount(self):
+    def test_sign_payment_with_small_amount(self):
         """Test signing payment with a small amount."""
         mock_provider = create_mock_wallet_provider()
         
         with patch("agent.tools.payment._get_wallet_provider_sync", return_value=mock_provider):
             from agent.tools.payment import sign_payment
             
-            result = await sign_payment(
+            result = sign_payment(
                 scheme="exact",
                 network="base-sepolia",
-                amount="0.0001",
+                amount="100",  # 0.0001 USDC
                 recipient=MOCK_RECIPIENT_ADDRESS,
             )
             
             assert result["success"] is True
-            assert result["payload"]["amount"] == "0.0001"
+            assert result["payload"]["accepted"]["amount"] == "100"
 
-    @pytest.mark.asyncio
-    async def test_sign_payment_with_larger_amount(self):
+    def test_sign_payment_with_larger_amount(self):
         """Test signing payment with a larger amount."""
         mock_provider = create_mock_wallet_provider()
         
         with patch("agent.tools.payment._get_wallet_provider_sync", return_value=mock_provider):
             from agent.tools.payment import sign_payment
             
-            result = await sign_payment(
+            result = sign_payment(
                 scheme="exact",
                 network="base-sepolia",
-                amount="0.01",
+                amount="10000",  # 0.01 USDC
                 recipient=MOCK_RECIPIENT_ADDRESS,
             )
             
             assert result["success"] is True
-            assert result["payload"]["amount"] == "0.01"
+            assert result["payload"]["accepted"]["amount"] == "10000"
 
-    @pytest.mark.asyncio
-    async def test_sign_payment_with_zero_amount(self):
+    def test_sign_payment_with_zero_amount(self):
         """Test signing payment with zero amount (free content)."""
         mock_provider = create_mock_wallet_provider()
         
         with patch("agent.tools.payment._get_wallet_provider_sync", return_value=mock_provider):
             from agent.tools.payment import sign_payment
             
-            result = await sign_payment(
+            result = sign_payment(
                 scheme="exact",
                 network="base-sepolia",
                 amount="0",
@@ -435,80 +391,113 @@ class TestSignPaymentWithDifferentAmounts:
             )
             
             assert result["success"] is True
-            assert result["payload"]["amount"] == "0"
+            assert result["payload"]["accepted"]["amount"] == "0"
 
 
 class TestSignPaymentX402Compatibility:
-    """Tests for x402 protocol compatibility of signed payments."""
+    """Tests for x402 v2 protocol compatibility of signed payments."""
 
-    @pytest.mark.asyncio
-    async def test_signed_payload_is_x402_compatible(self):
-        """Test that the signed payload is compatible with x402 protocol."""
+    def test_signed_payload_is_x402_v2_compatible(self):
+        """Test that the signed payload is compatible with x402 v2 protocol."""
         mock_provider = create_mock_wallet_provider()
         
         with patch("agent.tools.payment._get_wallet_provider_sync", return_value=mock_provider):
             from agent.tools.payment import sign_payment
             
-            result = await sign_payment(
+            result = sign_payment(
                 scheme="exact",
                 network="base-sepolia",
-                amount="0.001",
+                amount="1000",
                 recipient=MOCK_RECIPIENT_ADDRESS,
             )
             
             payload = result["payload"]
             
-            # x402 required fields
-            assert "scheme" in payload
-            assert "network" in payload
-            assert "signature" in payload
-            assert "from" in payload
-            assert "to" in payload
-            assert "amount" in payload
-            assert "timestamp" in payload
+            # x402 v2 required fields
+            assert payload["x402Version"] == 2
+            assert "accepted" in payload
+            assert "payload" in payload
+            
+            # accepted field structure
+            accepted = payload["accepted"]
+            assert "scheme" in accepted
+            assert "network" in accepted
+            assert "amount" in accepted
+            assert "payTo" in accepted
+            assert "asset" in accepted
+            
+            # payload field structure
+            inner_payload = payload["payload"]
+            assert "signature" in inner_payload
+            assert "authorization" in inner_payload
 
-    @pytest.mark.asyncio
-    async def test_signed_payload_addresses_are_valid_ethereum(self):
+    def test_signed_payload_addresses_are_valid_ethereum(self):
         """Test that addresses in payload are valid Ethereum addresses."""
         mock_provider = create_mock_wallet_provider()
         
         with patch("agent.tools.payment._get_wallet_provider_sync", return_value=mock_provider):
             from agent.tools.payment import sign_payment
             
-            result = await sign_payment(
+            result = sign_payment(
                 scheme="exact",
                 network="base-sepolia",
-                amount="0.001",
+                amount="1000",
                 recipient=MOCK_RECIPIENT_ADDRESS,
             )
             
-            payload = result["payload"]
+            auth = result["payload"]["payload"]["authorization"]
             
             # Validate from address format
-            assert payload["from"].startswith("0x")
-            assert len(payload["from"]) == 42
+            assert auth["from"].startswith("0x")
+            assert len(auth["from"]) == 42
             
             # Validate to address format
-            assert payload["to"].startswith("0x")
-            assert len(payload["to"]) == 42
+            assert auth["to"].startswith("0x")
+            assert len(auth["to"]) == 42
 
-    @pytest.mark.asyncio
-    async def test_signed_payload_timestamp_is_milliseconds(self):
-        """Test that timestamp is in milliseconds (not seconds)."""
+    def test_signed_payload_has_valid_time_window(self):
+        """Test that authorization has valid time window."""
         mock_provider = create_mock_wallet_provider()
         
         with patch("agent.tools.payment._get_wallet_provider_sync", return_value=mock_provider):
             from agent.tools.payment import sign_payment
             
-            result = await sign_payment(
+            before_time = int(time.time())
+            result = sign_payment(
                 scheme="exact",
                 network="base-sepolia",
-                amount="0.001",
+                amount="1000",
+                recipient=MOCK_RECIPIENT_ADDRESS,
+            )
+            after_time = int(time.time())
+            
+            auth = result["payload"]["payload"]["authorization"]
+            valid_after = int(auth["validAfter"])
+            valid_before = int(auth["validBefore"])
+            
+            # validAfter should be slightly before current time
+            assert valid_after <= before_time
+            
+            # validBefore should be in the future
+            assert valid_before > after_time
+
+    def test_signed_payload_has_hex_nonce(self):
+        """Test that authorization nonce is a hex string."""
+        mock_provider = create_mock_wallet_provider()
+        
+        with patch("agent.tools.payment._get_wallet_provider_sync", return_value=mock_provider):
+            from agent.tools.payment import sign_payment
+            
+            result = sign_payment(
+                scheme="exact",
+                network="base-sepolia",
+                amount="1000",
                 recipient=MOCK_RECIPIENT_ADDRESS,
             )
             
-            timestamp = result["payload"]["timestamp"]
+            nonce = result["payload"]["payload"]["authorization"]["nonce"]
             
-            # Timestamp should be in milliseconds (13+ digits for current time)
-            assert timestamp > 1000000000000  # After year 2001 in ms
-            assert timestamp < 10000000000000  # Before year 2286 in ms
+            # Nonce should be a hex string starting with 0x
+            assert nonce.startswith("0x")
+            # 32 bytes = 64 hex chars + 2 for "0x"
+            assert len(nonce) == 66

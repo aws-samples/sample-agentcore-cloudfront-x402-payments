@@ -2623,12 +2623,13 @@ class TestEndToEndToolChainIntegration:
         mock_provider = MagicMock()
         mock_provider.get_address.return_value = "0x1111111111111111111111111111111111111111"
         mock_provider.sign_message.return_value = "0x" + "ab" * 65
+        mock_provider.sign_typed_data.return_value = "0x" + "ab" * 65
         
         with patch("agent.tools.payment._get_wallet_provider_sync", return_value=mock_provider):
-            sign_result = await sign_payment(
+            sign_result = sign_payment(
                 scheme=accept["scheme"],
                 network="base-sepolia",  # Converted from CAIP-2 format
-                amount=amount_usdc,
+                amount=accept["amount"],  # Use atomic units
                 recipient=accept["payTo"],
             )
         
@@ -2637,11 +2638,10 @@ class TestEndToEndToolChainIntegration:
         assert "payload" in sign_result
         
         payload = sign_result["payload"]
-        assert payload["scheme"] == "exact"
-        assert payload["to"] == accept["payTo"]
-        assert "signature" in payload
-        assert "from" in payload
-        assert "timestamp" in payload
+        assert payload["x402Version"] == 2
+        assert payload["accepted"]["scheme"] == "exact"
+        assert payload["accepted"]["payTo"] == accept["payTo"]
+        assert "signature" in payload["payload"]
 
     @pytest.mark.asyncio
     async def test_complete_tool_chain_402_to_200(self, sample_402_payment_requirements):
@@ -2689,12 +2689,13 @@ class TestEndToEndToolChainIntegration:
         mock_provider = MagicMock()
         mock_provider.get_address.return_value = "0x1111111111111111111111111111111111111111"
         mock_provider.sign_message.return_value = "0x" + "ab" * 65
+        mock_provider.sign_typed_data.return_value = "0x" + "ab" * 65
         
         with patch("agent.tools.payment._get_wallet_provider_sync", return_value=mock_provider):
-            sign_result = await sign_payment(
+            sign_result = sign_payment(
                 scheme=payment_req["scheme"],
                 network="base-sepolia",
-                amount=amount_display,
+                amount=payment_req["amount"],  # Use atomic units
                 recipient=payment_req["recipient"],
             )
         
@@ -2702,14 +2703,14 @@ class TestEndToEndToolChainIntegration:
         payment_payload = sign_result["payload"]
         
         # ===== Step 4: Verify payload is valid for retry =====
-        # The payload should have all required fields for x402 protocol
-        required_fields = ["scheme", "network", "signature", "from", "to", "amount", "timestamp"]
-        for field in required_fields:
-            assert field in payment_payload, f"Missing required field: {field}"
+        # The payload should have all required fields for x402 v2 protocol
+        assert payment_payload["x402Version"] == 2
+        assert "accepted" in payment_payload
+        assert "payload" in payment_payload
         
         # Verify payload values match the original requirements
-        assert payment_payload["scheme"] == payment_req["scheme"]
-        assert payment_payload["to"] == payment_req["recipient"]
+        assert payment_payload["accepted"]["scheme"] == payment_req["scheme"]
+        assert payment_payload["accepted"]["payTo"] == payment_req["recipient"]
         
         # ===== Step 5: Simulate retry with payment returning 200 =====
         # (In real flow, this would be MCPClient.invoke_tool with payment_signature)
@@ -2720,8 +2721,8 @@ class TestEndToEndToolChainIntegration:
         
         # Verify the signature can be decoded (as server would)
         decoded = json.loads(base64.b64decode(payment_signature))
-        assert decoded["scheme"] == "exact"
-        assert decoded["signature"].startswith("0x")
+        assert decoded["x402Version"] == 2
+        assert decoded["payload"]["signature"].startswith("0x")
         
         # The flow is complete - in production, this signature would be sent
         # to the server and result in a 200 response with content
@@ -2858,12 +2859,13 @@ class TestEndToEndToolChainIntegration:
         mock_provider = MagicMock()
         mock_provider.get_address.return_value = "0x1111111111111111111111111111111111111111"
         mock_provider.sign_message.return_value = "0x" + "ab" * 65
+        mock_provider.sign_typed_data.return_value = "0x" + "ab" * 65
         
         with patch("agent.tools.payment._get_wallet_provider_sync", return_value=mock_provider):
-            sign_result = await sign_payment(
+            sign_result = sign_payment(
                 scheme="exact",
                 network="base-sepolia",
-                amount="0.001",
+                amount="1000",  # atomic units
                 recipient="0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb0",
             )
         

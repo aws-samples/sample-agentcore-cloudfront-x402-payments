@@ -126,88 +126,64 @@ async def test_agentcore_runtime(
     print(f"Message: {message}")
     
     start_time = time.time()
-    session_id = session_id or f"test-{uuid.uuid4().hex[:8]}"
+    session_id = session_id or f"test-session-{uuid.uuid4().hex}"
     
     try:
-        import boto3
-        from botocore.config import Config
+        from agent.runtime_client import RuntimeClient
         
-        # Configure boto3 client with retries
-        config = Config(
-            retries={"max_attempts": 3, "mode": "adaptive"},
-            connect_timeout=30,
-            read_timeout=300,  # Agent may take time to respond
+        # Create AgentCore Runtime client using our runtime_client module
+        client = RuntimeClient(
+            agent_runtime_arn=runtime_arn,
+            region=region,
         )
-        
-        # Create AgentCore Runtime client
-        # Note: The service name may vary based on AWS SDK version
-        try:
-            client = boto3.client(
-                "bedrock-agent-runtime",
-                region_name=region,
-                config=config,
-            )
-        except Exception:
-            # Fallback to bedrock-agentcore if available
-            client = boto3.client(
-                "bedrock-agentcore",
-                region_name=region,
-                config=config,
-            )
         
         # Invoke the agent
-        # The exact API depends on the AgentCore service version
-        response = client.invoke_agent(
-            agentId=runtime_arn.split("/")[-1] if "/" in runtime_arn else runtime_arn,
-            agentAliasId="TSTALIASID",  # Default test alias
-            sessionId=session_id,
-            inputText=message,
+        response = client.invoke(
+            prompt=message,
+            session_id=session_id,
         )
-        
-        # Process streaming response
-        completion = ""
-        for event in response.get("completion", []):
-            if "chunk" in event:
-                chunk_data = event["chunk"]
-                if "bytes" in chunk_data:
-                    completion += chunk_data["bytes"].decode("utf-8")
         
         duration_ms = (time.time() - start_time) * 1000
         
-        return TestResult(
-            success=True,
-            scenario_name=scenario_name,
-            mode="agentcore",
-            response=completion,
-            duration_ms=duration_ms,
-            session_id=session_id,
-        )
+        if response.success:
+            return TestResult(
+                success=True,
+                scenario_name=scenario_name,
+                mode="agentcore",
+                response=response.completion,
+                duration_ms=duration_ms,
+                session_id=session_id,
+            )
+        else:
+            return TestResult(
+                success=False,
+                scenario_name=scenario_name,
+                mode="agentcore",
+                error=response.error,
+                duration_ms=duration_ms,
+                session_id=session_id,
+            )
         
     except ImportError as e:
         return TestResult(
             success=False,
             scenario_name=scenario_name,
             mode="agentcore",
-            error=f"boto3 not installed: {e}",
+            error=f"Could not import runtime_client: {e}",
         )
     except Exception as e:
         duration_ms = (time.time() - start_time) * 1000
         error_msg = str(e)
         
         # Provide helpful error messages
-        if "UnrecognizedClientException" in error_msg:
-            error_msg = (
-                "AgentCore service not available in this region or account. "
-                "Ensure AgentCore is enabled and the runtime is deployed."
-            )
-        elif "ResourceNotFoundException" in error_msg:
+        if "ResourceNotFoundException" in error_msg:
             error_msg = (
                 f"Runtime not found: {runtime_arn}. "
                 "Verify the runtime ARN and ensure it's deployed."
             )
         elif "AccessDeniedException" in error_msg:
             error_msg = (
-                "Access denied. Check IAM permissions for bedrock-agentcore:InvokeAgent."
+                "Access denied. Check IAM permissions for bedrock-agentcore:InvokeAgentRuntime."
             )
         
         return TestResult(

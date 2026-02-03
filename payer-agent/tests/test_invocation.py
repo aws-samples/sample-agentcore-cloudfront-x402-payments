@@ -176,11 +176,17 @@ class TestAgentCoreTest:
     async def test_agentcore_client_error(self):
         """Test handling of AWS client errors."""
         from test_agent_invocation import test_agentcore_runtime
+        from agent.runtime_client import InvocationResponse
         
-        mock_client = MagicMock()
-        mock_client.invoke_agent.side_effect = Exception("ResourceNotFoundException")
+        # Mock the RuntimeClient to return an error response
+        mock_response = InvocationResponse(
+            success=False,
+            session_id="test-session",
+            error="Runtime not found: test. Verify the runtime ARN and ensure it's deployed.",
+            error_type="ResourceNotFoundException",
+        )
         
-        with patch("boto3.client", return_value=mock_client):
+        with patch("agent.runtime_client.RuntimeClient.invoke", return_value=mock_response):
             result = await test_agentcore_runtime(
                 runtime_arn="arn:aws:bedrock:us-west-2:123456789:agent-runtime/test",
                 message="Hello",

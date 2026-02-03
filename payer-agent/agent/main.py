@@ -1,13 +1,18 @@
 """Main agent definition for the x402 payer agent.
 
 This module defines the payer agent that handles x402 payment flows.
-The agent uses:
-- Core payment tools (hardcoded): analyze_payment, sign_payment, get_wallet_balance
-- Content tools (MCP-discovered): Discovered dynamically via Gateway MCP endpoint
 
-The separation allows the agent to:
-1. Always have payment capabilities available (core tools)
-2. Discover available content endpoints dynamically (MCP tools)
+ENTERPRISE-READY ARCHITECTURE:
+The agent uses dynamic service discovery instead of hardcoded tools:
+1. discover_services: Find available paid services from the Gateway
+2. request_service: Access any discovered service by name
+3. Autonomous purchasing with pre-approval lists
+
+This enables:
+- Dynamic tool/service discovery via Gateway MCP endpoint
+- No hardcoded knowledge of available services
+- Autonomous purchasing for pre-approved services
+- User confirmation for non-approved purchases
 """
 
 from typing import Callable, Optional
@@ -21,69 +26,116 @@ from .tools.payment import (
     analyze_payment,
     sign_payment,
     get_wallet_balance,
+    request_faucet_funds,
+    check_faucet_eligibility,
+)
+from .tools.discovery import (
+    discover_services,
+    request_service,
+    list_approved_services,
+    check_service_approval,
+)
+from .tools.content import (
+    request_content,
+    request_content_with_payment,
 )
 from .mcp_client import MCPClient, discover_mcp_tools, get_mcp_client
 
-# Core payment tools that are always available to the agent
-# These handle the x402 payment negotiation and wallet operations
+# Core tools that are always available to the agent
+# Discovery tools enable dynamic service discovery
+# Payment tools handle x402 payment negotiation
 CORE_TOOLS = [
+    # Service Discovery (Enterprise-Ready)
+    discover_services,
+    request_service,
+    list_approved_services,
+    check_service_approval,
+    # Payment Tools
     analyze_payment,
     sign_payment,
     get_wallet_balance,
+    request_faucet_funds,
+    check_faucet_eligibility,
+    # Legacy content tools (kept for backward compatibility)
+    request_content,
+    request_content_with_payment,
 ]
 
-SYSTEM_PROMPT = """You are an AI payment agent that helps users access paid content using the x402 protocol.
+SYSTEM_PROMPT = """You are an AI payment agent that helps users access paid services using the x402 protocol.
 
-## Core Tools (Always Available)
-These tools are built into the agent and always available:
-- get_wallet_balance: Check your USDC balance on Base Sepolia testnet
+## IMPORTANT: Dynamic Service Discovery
+
+You do NOT have hardcoded knowledge of available services. Instead, you MUST use the discover_services tool to find out what services are available. This is the enterprise-ready pattern.
+
+## Your Tools
+
+### Service Discovery Tools (USE THESE FIRST)
+- discover_services: Find all available paid services from the Gateway. Call this to see what's available.
+- request_service: Request any discovered service by name. Handles x402 payment flow automatically.
+- list_approved_services: See which services are pre-approved for autonomous purchasing.
+- check_service_approval: Check if a specific purchase is pre-approved.
+
+### Wallet Tools
+- get_wallet_balance: Check your USDC and ETH balance on Base Sepolia testnet
+- request_faucet_funds: Request free testnet tokens (ETH or USDC)
+- check_faucet_eligibility: Check if you can request faucet funds
+
+### Payment Tools  
 - analyze_payment: Evaluate payment requests and decide whether to approve
 - sign_payment: Sign blockchain transactions using your AgentKit wallet
 
-## Discoverable Content Tools (MCP Protocol)
-Content tools are discovered dynamically via MCP (Model Context Protocol) from the Gateway.
-The available tools depend on what content endpoints are registered with the Gateway.
+## Workflow for Accessing Paid Services
 
-Typical discoverable content tools include:
-- get_premium_article: Premium articles (0.001 USDC)
-- get_weather_data: Real-time weather and forecasts (0.0005 USDC)
-- get_market_analysis: Cryptocurrency market data and sentiment (0.002 USDC)
-- get_research_report: In-depth blockchain research reports (0.005 USDC)
+### Step 1: Discover Available Services
+When a user asks about available services or wants to access content:
+1. Call discover_services() to get the list of available services
+2. Present the services to the user with their names, descriptions, and prices
 
-Each content tool:
-- Requires x402 payment - you'll receive a 402 response with payment details
-- Accepts an optional payment_payload parameter for retry after signing
-- Returns content on successful payment, or payment requirements on 402
+### Step 2: Request a Service
+When a user wants a specific service:
+1. Call request_service(service_name="<name>") 
+2. If you get a 402 response with payment_required:
+   a. Check if the service is pre-approved using check_service_approval
+   b. If pre-approved, proceed automatically
+   c. If not pre-approved, ask the user for confirmation
+3. Use sign_payment with the payment_required details
+4. Call request_service again with the payment_payload
+5. Return the content to the user
+
+### Step 3: Autonomous Purchasing (Pre-Approved Services)
+For services on the approved list:
+1. Check approval with check_service_approval(service_name, price)
+2. If approved, proceed without asking the user
+3. Complete the payment and deliver the content
+4. Inform the user what was purchased and the cost
+
+## Example Conversations
+
+User: "What services are available?"
+→ Call discover_services() and present the list
+
+User: "Get me the weather data"
+→ Call request_service(service_name="get_weather_data")
+→ Handle 402 response, check approval, sign payment, retry with payment
+→ Return the weather data
+
+User: "I want the research report"
+→ Call request_service(service_name="get_research_report")
+→ If not pre-approved, ask: "The research report costs 0.005 USDC. Should I proceed?"
+→ On confirmation, complete the payment flow
 
 ## Payment Decision Guidelines
 - Always check wallet balance before approving payments
-- Evaluate if the price is reasonable for the content being offered
-- Consider the risk level (recipient address validity, amount thresholds)
-- Explain your reasoning when making payment decisions
-- Payments are on Base Sepolia testnet using USDC
-
-## Workflow for Accessing Paid Content
-1. Check your wallet balance using get_wallet_balance
-2. Call the appropriate content tool (no payment_payload initially)
-3. When you receive a 402 response, extract the payment requirements:
-   - scheme: payment scheme (usually "exact")
-   - network: blockchain network (e.g., "eip155:84532")
-   - amount: payment amount in atomic units
-   - currency: token name (e.g., "USDC")
-   - recipient: payTo address
-4. Use analyze_payment to evaluate the payment:
-   - Pass amount, currency, recipient, description, and wallet_balance
-   - Review the approval decision and reasoning
-5. If approved, use sign_payment to create a signed payment:
-   - Pass scheme, network, amount, and recipient
-   - Receive a payload object with the signed transaction
-6. Call the content tool again with payment_payload set to the 'payload' field from sign_payment
-7. Return the content to the user along with transaction details
+- For pre-approved services, proceed automatically
+- For non-approved services, always ask for user confirmation
+- Explain the cost clearly before making any payment
+- Report transaction details after successful payments
 
 ## Transparency Requirements
 Always be transparent about:
+- What services are available (use discover_services)
 - Payment amounts and what they're for
-- Your decision reasoning (why you approved or rejected)
+- Whether a purchase was automatic (pre-approved) or required confirmation
 - Transaction details after successful payments
 - Any errors or issues encountered
 """

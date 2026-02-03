@@ -13,7 +13,7 @@ from ..metrics import get_metrics_emitter
 
 
 @tool
-async def request_content(url: str) -> dict[str, Any]:
+def request_content(url: str) -> dict[str, Any]:
     """
     Request content from the seller API.
 
@@ -23,7 +23,7 @@ async def request_content(url: str) -> dict[str, Any]:
         url: The content URL path (e.g., "/api/premium-article")
 
     Returns:
-        Dictionary with status, content (if 200), or payment requirements (if 402)
+        Dictionary with http_status, data (if 200), or payment_required (if 402)
     """
     tracer = get_tracer()
     metrics = get_metrics_emitter()
@@ -35,9 +35,9 @@ async def request_content(url: str) -> dict[str, Any]:
         span.set_attribute("http.method", "GET")
         span.set_attribute("content.path", url)
 
-        async with httpx.AsyncClient() as client:
-            try:
-                response = await client.get(
+        try:
+            with httpx.Client(timeout=30.0) as client:
+                response = client.get(
                     full_url,
                     headers={"Accept": "application/json"},
                     follow_redirects=True,
@@ -54,14 +54,18 @@ async def request_content(url: str) -> dict[str, Any]:
                         content_path=url,
                     )
                     return {
-                        "status": 200,
-                        "content": response.json(),
+                        "http_status": 200,
+                        "data": response.json(),
                     }
 
                 if response.status_code == 402:
                     span.set_attribute("payment.required", True)
-                    # Parse payment requirements from header
-                    payment_required_header = response.headers.get("PAYMENT-REQUIRED")
+                    # Parse payment requirements from header (x402 v2 uses x-payment-required)
+                    payment_required_header = (
+                        response.headers.get("x-payment-required") or
+                        response.headers.get("X-PAYMENT-REQUIRED") or
+                        response.headers.get("PAYMENT-REQUIRED")
+                    )
                     if not payment_required_header:
                         span.set_attribute("error.type", "missing_header")
                         metrics.record_content_request(
@@ -72,16 +76,24 @@ async def request_content(url: str) -> dict[str, Any]:
                             error="missing_header",
                         )
                         return {
-                            "status": 402,
-                            "error": "Missing PAYMENT-REQUIRED header",
+                            "http_status": 402,
+                            "error_message": "Missing x-payment-required header",
                         }
 
-                    # Decode base64 payment requirements
+                    # Decode base64 payment requirements (x402 v2 format)
                     payment_data = json.loads(base64.b64decode(payment_required_header))
-                    requirement = payment_data.get("requirements", [{}])[0]
+                    # x402 v2 uses "accepts" array, v1 used "requirements"
+                    accepts = payment_data.get("accepts", payment_data.get("requirements", []))
+                    requirement = accepts[0] if accepts else {}
+                    
+                    # x402 v2 uses "payTo" instead of "recipient"
+                    recipient = requirement.get("payTo", requirement.get("recipient", ""))
+                    # x402 v2 uses "asset" address, extra.name has currency name
+                    extra = requirement.get("extra", {})
+                    currency = extra.get("name", requirement.get("currency", "USDC"))
                     
                     span.set_attribute("payment.amount", requirement.get("amount", ""))
-                    span.set_attribute("payment.currency", requirement.get("currency", ""))
+                    span.set_attribute("payment.currency", currency)
                     span.set_attribute("payment.network", requirement.get("network", ""))
                     
                     metrics.record_content_request(
@@ -92,14 +104,16 @@ async def request_content(url: str) -> dict[str, Any]:
                     )
 
                     return {
-                        "status": 402,
+                        "http_status": 402,
                         "payment_required": {
                             "scheme": requirement.get("scheme"),
                             "network": requirement.get("network"),
                             "amount": requirement.get("amount"),
-                            "currency": requirement.get("currency"),
-                            "recipient": requirement.get("recipient"),
-                            "description": requirement.get("description"),
+                            "asset": requirement.get("asset"),
+                            "currency": currency,
+                            "recipient": recipient,
+                            "description": payment_data.get("resource", {}).get("description", ""),
+                            "maxTimeoutSeconds": requirement.get("maxTimeoutSeconds", 60),
                         },
                     }
 
@@ -111,29 +125,29 @@ async def request_content(url: str) -> dict[str, Any]:
                     error=f"unexpected_status_{response.status_code}",
                 )
                 return {
-                    "status": response.status_code,
-                    "error": f"Unexpected status code: {response.status_code}",
+                    "http_status": response.status_code,
+                    "error_message": f"Unexpected status code: {response.status_code}",
                 }
 
-            except httpx.RequestError as e:
-                span.set_attribute("error.type", "request_error")
-                span.set_attribute("error.message", str(e))
-                span.record_exception(e)
-                latency_ms = (time.time() - start_time) * 1000
-                metrics.record_content_request(
-                    status_code=0,
-                    latency_ms=latency_ms,
-                    content_path=url,
-                    error=str(e),
-                )
-                return {
-                    "status": 0,
-                    "error": f"Request failed: {str(e)}",
-                }
+        except httpx.RequestError as e:
+            span.set_attribute("error.type", "request_error")
+            span.set_attribute("error.message", str(e))
+            span.record_exception(e)
+            latency_ms = (time.time() - start_time) * 1000
+            metrics.record_content_request(
+                status_code=0,
+                latency_ms=latency_ms,
+                content_path=url,
+                error=str(e),
+            )
+            return {
+                "http_status": 0,
+                "error_message": f"Request failed: {str(e)}",
+            }
 
 
 @tool
-async def request_content_with_payment(
+def request_content_with_payment(
     url: str,
     payment_payload: dict[str, Any],
 ) -> dict[str, Any]:
@@ -145,7 +159,7 @@ async def request_content_with_payment(
         payment_payload: The signed payment payload from sign_payment tool
 
     Returns:
-        Dictionary with status, content, and transaction details
+        Dictionary with http_status, data, and settlement details
     """
     tracer = get_tracer()
     metrics = get_metrics_emitter()
@@ -168,13 +182,13 @@ async def request_content_with_payment(
             json.dumps(payment_payload).encode()
         ).decode()
 
-        async with httpx.AsyncClient() as client:
-            try:
-                response = await client.get(
+        try:
+            with httpx.Client(timeout=30.0) as client:
+                response = client.get(
                     full_url,
                     headers={
                         "Accept": "application/json",
-                        "PAYMENT-SIGNATURE": payment_signature,
+                        "x-payment-signature": payment_signature,  # x402 v2 header
                     },
                     follow_redirects=True,
                 )
@@ -186,8 +200,12 @@ async def request_content_with_payment(
                     span.set_attribute("content.delivered", True)
                     span.set_attribute("payment.accepted", True)
                     
-                    # Parse settlement response from header
-                    payment_response_header = response.headers.get("PAYMENT-RESPONSE")
+                    # Parse settlement response from header (x402 v2 uses x-payment-response)
+                    payment_response_header = (
+                        response.headers.get("x-payment-response") or
+                        response.headers.get("X-PAYMENT-RESPONSE") or
+                        response.headers.get("PAYMENT-RESPONSE")
+                    )
                     settlement = None
                     if payment_response_header:
                         settlement = json.loads(base64.b64decode(payment_response_header))
@@ -202,8 +220,8 @@ async def request_content_with_payment(
                     )
 
                     return {
-                        "status": 200,
-                        "content": response.json(),
+                        "http_status": 200,
+                        "data": response.json(),
                         "settlement": settlement,
                     }
 
@@ -218,8 +236,8 @@ async def request_content_with_payment(
                         error="payment_rejected",
                     )
                     return {
-                        "status": 402,
-                        "error": "Payment was rejected by the server",
+                        "http_status": 402,
+                        "error_message": "Payment was rejected by the server",
                     }
 
                 span.set_attribute("error.type", "unexpected_status")
@@ -230,22 +248,22 @@ async def request_content_with_payment(
                     error=f"unexpected_status_{response.status_code}",
                 )
                 return {
-                    "status": response.status_code,
-                    "error": f"Unexpected status code: {response.status_code}",
+                    "http_status": response.status_code,
+                    "error_message": f"Unexpected status code: {response.status_code}",
                 }
 
-            except httpx.RequestError as e:
-                span.set_attribute("error.type", "request_error")
-                span.set_attribute("error.message", str(e))
-                span.record_exception(e)
-                latency_ms = (time.time() - start_time) * 1000
-                metrics.record_content_request(
-                    status_code=0,
-                    latency_ms=latency_ms,
-                    content_path=url,
-                    error=str(e),
-                )
-                return {
-                    "status": 0,
-                    "error": f"Request failed: {str(e)}",
-                }
+        except httpx.RequestError as e:
+            span.set_attribute("error.type", "request_error")
+            span.set_attribute("error.message", str(e))
+            span.record_exception(e)
+            latency_ms = (time.time() - start_time) * 1000
+            metrics.record_content_request(
+                status_code=0,
+                latency_ms=latency_ms,
+                content_path=url,
+                error=str(e),
+            )
+            return {
+                "http_status": 0,
+                "error_message": f"Request failed: {str(e)}",
+            }

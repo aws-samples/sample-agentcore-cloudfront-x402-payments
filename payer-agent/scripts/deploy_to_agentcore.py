@@ -171,6 +171,7 @@ def get_env_vars() -> dict:
         "CDP_WALLET_ADDRESS",
         "NETWORK_ID",
         "BEDROCK_MODEL_ID",
+        "SELLER_API_URL",  # Required for content tools to reach CloudFront
     ]
     
     return {k: v for k, v in env.items() if k in allowed_vars and v}
