@@ -119,6 +119,8 @@ export class AgentCoreStack extends cdk.Stack {
     });
 
     // Bedrock model access
+    // Note: Cross-region inference profiles (us.anthropic.claude-*) route to different regions,
+    // so we need to allow all regions for foundation models.
     agentRuntimeRole.addToPolicy(new iam.PolicyStatement({
       effect: iam.Effect.ALLOW,
       actions: [
@@ -126,8 +128,10 @@ export class AgentCoreStack extends cdk.Stack {
         'bedrock:InvokeModelWithResponseStream',
       ],
       resources: [
-        `arn:aws:bedrock:${this.region}::foundation-model/anthropic.claude-3-sonnet-*`,
-        `arn:aws:bedrock:${this.region}::foundation-model/anthropic.claude-3-5-sonnet-*`,
+        // Foundation models in all regions (for cross-region inference)
+        'arn:aws:bedrock:*::foundation-model/anthropic.claude-*',
+        // Cross-region inference profiles
+        'arn:aws:bedrock:*:*:inference-profile/us.anthropic.claude-*',
       ],
     }));
 
@@ -150,6 +154,27 @@ export class AgentCoreStack extends cdk.Stack {
       ],
       resources: [
         `arn:aws:logs:${this.region}:${this.account}:log-group:/aws/bedrock-agentcore/*`,
+      ],
+    }));
+
+    // ECR access for container-based deployment
+    agentRuntimeRole.addToPolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: [
+        'ecr:GetAuthorizationToken',
+      ],
+      resources: ['*'],
+    }));
+
+    agentRuntimeRole.addToPolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: [
+        'ecr:BatchGetImage',
+        'ecr:GetDownloadUrlForLayer',
+        'ecr:BatchCheckLayerAvailability',
+      ],
+      resources: [
+        `arn:aws:ecr:${this.region}:${this.account}:repository/x402-payer-agent`,
       ],
     }));
 

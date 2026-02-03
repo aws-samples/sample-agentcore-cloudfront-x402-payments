@@ -95,8 +95,14 @@ def _get_runtime_client():
 
 
 class InvokeRequest(BaseModel):
-    prompt: str
+    prompt: Optional[str] = None
+    message: Optional[str] = None  # Alternative field name for AgentCore
     session_id: Optional[str] = None
+    
+    @property
+    def text(self) -> str:
+        """Get the prompt text from either field."""
+        return self.prompt or self.message or ""
 
 
 class InvokeResponse(BaseModel):
@@ -111,16 +117,94 @@ async def health_check():
     return {"status": "healthy"}
 
 
-@app.post("/invoke", response_model=InvokeResponse)
-async def invoke_agent(request: InvokeRequest):
-    """Invoke the agent with the given prompt."""
+@app.get("/ping")
+async def ping():
+    """AgentCore health check endpoint."""
+    import time
+    return {
+        "status": "Healthy",
+        "time_of_last_update": int(time.time())
+    }
+
+
+@app.post("/test")
+async def test_endpoint(request: InvokeRequest):
+    """Simple test endpoint that doesn't use the agent."""
+    return {
+        "response": f"Echo: {request.text}",
+        "status": "success",
+        "session_id": "test-session",
+    }
+
+
+@app.post("/invocations")
+async def invocations(request: InvokeRequest):
+    """AgentCore invocation endpoint - primary agent interaction."""
+    import logging
+    import traceback
+    import sys
+    
+    logger = logging.getLogger(__name__)
+    logger.info(f"Received invocation request: {request}")
+    
     session_id = request.session_id or str(uuid.uuid4())
+    prompt_text = request.text
+    
+    if not prompt_text:
+        logger.error("No prompt or message provided")
+        raise HTTPException(400, "Either 'prompt' or 'message' field is required")
     
     try:
         if _use_local_mode():
             # Local mode: use Strands agent directly
             agent = _get_local_agent()
-            response = agent(request.prompt)
+            response = agent(prompt_text)
+            return {
+                "response": str(response),
+                "status": "success",
+                "session_id": session_id,
+            }
+        else:
+            # AgentCore mode: invoke runtime
+            client = _get_runtime_client()
+            response = client.invoke(
+                prompt=prompt_text,
+                session_id=session_id,
+            )
+            if not response.success:
+                raise HTTPException(500, response.error or "Agent invocation failed")
+            return {
+                "response": response.completion,
+                "status": "success",
+                "session_id": response.session_id,
+            }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in invocations: {e}", exc_info=True)
+        # Return error as response for AgentCore compatibility
+        # AgentCore expects a valid JSON response, not an HTTP error
+        return {
+            "response": f"Error: {str(e)}",
+            "status": "error",
+            "session_id": session_id,
+        }
+
+
+@app.post("/invoke", response_model=InvokeResponse)
+async def invoke_agent(request: InvokeRequest):
+    """Invoke the agent with the given prompt."""
+    session_id = request.session_id or str(uuid.uuid4())
+    prompt_text = request.text
+    
+    if not prompt_text:
+        raise HTTPException(400, "Either 'prompt' or 'message' field is required")
+    
+    try:
+        if _use_local_mode():
+            # Local mode: use Strands agent directly
+            agent = _get_local_agent()
+            response = agent(prompt_text)
             return InvokeResponse(
                 success=True,
                 completion=str(response),
@@ -130,7 +214,7 @@ async def invoke_agent(request: InvokeRequest):
             # AgentCore mode: invoke runtime
             client = _get_runtime_client()
             response = client.invoke(
-                prompt=request.prompt,
+                prompt=prompt_text,
                 session_id=session_id,
             )
             if not response.success:
@@ -150,20 +234,25 @@ async def invoke_agent(request: InvokeRequest):
 async def invoke_agent_streaming(request: InvokeRequest):
     """Invoke the agent and stream the response (SSE)."""
     session_id = request.session_id or str(uuid.uuid4())
+    prompt_text = request.text
     
     async def generate():
         try:
+            if not prompt_text:
+                yield f"data: {json.dumps({'type': 'error', 'error': 'Either prompt or message field is required'})}\n\n"
+                return
+                
             if _use_local_mode():
                 # Local mode: run agent and return full response
                 # (Strands doesn't support streaming yet)
                 agent = _get_local_agent()
-                response = str(agent(request.prompt))
+                response = str(agent(prompt_text))
                 yield f"data: {json.dumps({'type': 'text', 'text': response})}\n\n"
             else:
                 # AgentCore mode: stream from runtime
                 client = _get_runtime_client()
                 for chunk in client.invoke_streaming(
-                    prompt=request.prompt,
+                    prompt=prompt_text,
                     session_id=session_id,
                 ):
                     yield f"data: {json.dumps({'type': 'text', 'text': chunk})}\n\n"

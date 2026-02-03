@@ -122,16 +122,38 @@ aws secretsmanager put-secret-value \
 
 ### Deploy to AgentCore Runtime
 
-Via AWS Console:
-1. Amazon Bedrock > AgentCore > Runtimes
-2. Create Runtime
-3. Upload `dist/x402-payer-agent.zip`
-4. Configure with `agentcore_config.yaml`
-
-### Test
+The agent is deployed as a Docker container to AgentCore Runtime:
 
 ```bash
-python scripts/invoke_gateway.py --agent-id <AGENT_ID> --message "Check my wallet balance"
+# Deploy using the deployment script
+python scripts/deploy_to_agentcore.py
+```
+
+This will:
+1. Build a Docker image with all dependencies
+2. Push to ECR (`633890776779.dkr.ecr.us-west-2.amazonaws.com/x402-payer-agent`)
+3. Create/update the AgentCore Runtime
+
+Current Runtime ARN:
+```
+arn:aws:bedrock-agentcore:us-west-2:633890776779:runtime/x402PayerAgent-9R4MXKAf4E
+```
+
+### Test Invocation
+
+```bash
+python -c "
+import boto3
+import json
+
+client = boto3.client('bedrock-agentcore', region_name='us-west-2')
+response = client.invoke_agent_runtime(
+    agentRuntimeArn='arn:aws:bedrock-agentcore:us-west-2:633890776779:runtime/x402PayerAgent-9R4MXKAf4E',
+    payload=json.dumps({'message': 'What is your wallet balance?'}).encode('utf-8'),
+)
+result = response.get('response').read()
+print(json.loads(result.decode())['response'])
+"
 ```
 
 ## Configuration

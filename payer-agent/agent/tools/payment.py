@@ -1,10 +1,32 @@
 """Payment-related tools for the x402 payer agent."""
 
 import json
+import sys
 import time
 from typing import Any, Literal
 from strands import tool
-from coinbase_agentkit import CdpEvmWalletProvider, CdpEvmWalletProviderConfig
+
+# Mock bcl module to avoid nillion/bcl native extension issues in containers
+# We don't use nillion features, but coinbase_agentkit imports it at the top level
+if 'bcl' not in sys.modules:
+    import types
+    mock_bcl = types.ModuleType('bcl')
+    mock_bcl.symmetric = types.ModuleType('bcl.symmetric')
+    mock_bcl.asymmetric = types.ModuleType('bcl.asymmetric')
+    sys.modules['bcl'] = mock_bcl
+    sys.modules['bcl.symmetric'] = mock_bcl.symmetric
+    sys.modules['bcl.asymmetric'] = mock_bcl.asymmetric
+
+# Now import coinbase_agentkit - the nillion import will fail gracefully
+# since bcl is mocked
+try:
+    from coinbase_agentkit.wallet_providers.cdp_evm_wallet_provider import (
+        CdpEvmWalletProvider,
+        CdpEvmWalletProviderConfig,
+    )
+except ImportError:
+    # If direct import fails, try the main module
+    from coinbase_agentkit import CdpEvmWalletProvider, CdpEvmWalletProviderConfig
 
 from ..config import config
 from ..tracing import get_tracer, add_payment_span_attributes
