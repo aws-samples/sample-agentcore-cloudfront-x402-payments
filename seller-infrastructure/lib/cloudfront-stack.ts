@@ -32,7 +32,7 @@ export class X402SellerStack extends cdk.Stack {
         handler: 'payment-verifier.handler',
         code: lambda.Code.fromAsset(path.join(__dirname, 'lambda-edge')),
         memorySize: 128,
-        timeout: cdk.Duration.seconds(5),
+        timeout: cdk.Duration.seconds(20),
         // Note: Lambda@Edge doesn't support environment variables directly
         // The bucket name is configured in content-config.ts via CONTENT_BUCKET env var
         // which must be set at build time or use the default bucket name
@@ -196,9 +196,16 @@ export class X402SellerStack extends cdk.Stack {
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
         allowedMethods: cloudfront.AllowedMethods.ALLOW_GET_HEAD_OPTIONS,
         cachedMethods: cloudfront.CachedMethods.CACHE_GET_HEAD_OPTIONS,
-        // Default behavior uses public content caching for non-API paths
-        cachePolicy: publicContentCachePolicy,
+        // Default behavior uses payment verification for all content
+        cachePolicy: paymentApiCachePolicy,
+        originRequestPolicy: paymentApiOriginRequestPolicy,
         responseHeadersPolicy: responseHeadersPolicy,
+        edgeLambdas: [
+          {
+            functionVersion: paymentVerifier.currentVersion,
+            eventType: cloudfront.LambdaEdgeEventType.ORIGIN_REQUEST,
+          },
+        ],
         compress: true,
       },
       additionalBehaviors: {
@@ -213,7 +220,7 @@ export class X402SellerStack extends cdk.Stack {
           edgeLambdas: [
             {
               functionVersion: paymentVerifier.currentVersion,
-              eventType: cloudfront.LambdaEdgeEventType.VIEWER_REQUEST,
+              eventType: cloudfront.LambdaEdgeEventType.ORIGIN_REQUEST,
             },
           ],
           compress: true,
@@ -230,7 +237,7 @@ export class X402SellerStack extends cdk.Stack {
           edgeLambdas: [
             {
               functionVersion: paymentVerifier.currentVersion,
-              eventType: cloudfront.LambdaEdgeEventType.VIEWER_REQUEST,
+              eventType: cloudfront.LambdaEdgeEventType.ORIGIN_REQUEST,
             },
           ],
           compress: true,

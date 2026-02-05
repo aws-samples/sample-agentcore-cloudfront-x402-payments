@@ -26,11 +26,9 @@
 
 .app-main {
   display: flex;
-  flex-direction: row;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 2rem;
-  justify-content: center;
-  align-items: flex-start;
+  align-items: center;
 }
 
 .wallet-section,
@@ -39,6 +37,14 @@
   flex-direction: column;
   align-items: center;
   gap: 1.5rem;
+}
+
+.content-section {
+  width: 100%;
+}
+
+.content-section .content-request {
+  margin: 0 auto;
 }
 
 .wallet-section h2,

@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import './ContentRequest.css';
-import { TransactionConfirmation, type TransactionDetails } from './TransactionConfirmation';
 
-// Content item types matching seller infrastructure
+const API_ENDPOINT = import.meta.env.VITE_API_ENDPOINT || 'http://localhost:8080';
+
 export interface ContentItem {
   id: string;
   path: string;
@@ -12,255 +12,303 @@ export interface ContentItem {
   currency: string;
 }
 
-// Payment flow status
-export type PaymentStatus = 
-  | 'idle'
-  | 'requesting'
-  | 'payment_required'
-  | 'analyzing'
-  | 'signing'
-  | 'retrying'
-  | 'success'
-  | 'error';
+export interface DebugLogEntry {
+  timestamp: string;
+  type: 'request' | 'response' | 'info' | 'error';
+  title: string;
+  data: unknown;
+}
 
-// Payment requirement from 402 response
-export interface PaymentRequirement {
+interface PaymentDetails {
   scheme: string;
   network: string;
   amount: string;
   asset: string;
-  payTo: string;
-}
-
-// Content request result
-export interface ContentResult {
-  content?: unknown;
-  transactionHash?: string;
-  error?: string;
+  currency: string;
+  recipient: string;
+  description: string;
+  maxTimeoutSeconds: number;
 }
 
 interface ContentRequestProps {
   walletConnected: boolean;
-  onRequestContent?: (item: ContentItem) => Promise<ContentResult>;
 }
 
-// Available content items (matching seller infrastructure)
+// All 6 content items from the seller
 const AVAILABLE_CONTENT: ContentItem[] = [
-  {
-    id: 'premium-article',
-    path: '/api/premium-article',
-    title: 'AI & Blockchain Integration',
-    description: 'Premium article about AI and blockchain convergence',
-    price: '0.001',
-    currency: 'USDC',
-  },
   {
     id: 'weather-data',
     path: '/api/weather-data',
-    title: 'Real-time Weather Data',
+    title: 'Weather Data',
     description: 'Current weather conditions and forecast',
     price: '0.0005',
     currency: 'USDC',
   },
   {
+    id: 'premium-article',
+    path: '/api/premium-article',
+    title: 'Premium Article',
+    description: 'AI and blockchain convergence',
+    price: '0.001',
+    currency: 'USDC',
+  },
+  {
     id: 'market-analysis',
     path: '/api/market-analysis',
-    title: 'Crypto Market Analysis',
+    title: 'Market Analysis',
     description: 'Real-time market data and analysis',
     price: '0.002',
     currency: 'USDC',
   },
   {
+    id: 'tutorial',
+    path: '/api/tutorial',
+    title: 'Smart Contract Tutorial',
+    description: 'Advanced smart contract guide',
+    price: '0.003',
+    currency: 'USDC',
+  },
+  {
     id: 'research-report',
     path: '/api/research-report',
-    title: 'Blockchain Research Report',
-    description: 'In-depth research on blockchain trends',
+    title: 'Research Report',
+    description: 'Blockchain technology trends',
     price: '0.005',
+    currency: 'USDC',
+  },
+  {
+    id: 'dataset',
+    path: '/api/dataset',
+    title: 'Premium Dataset',
+    description: 'ML/analytics curated dataset',
+    price: '0.01',
     currency: 'USDC',
   },
 ];
 
-// Status messages for each payment status
-const STATUS_MESSAGES: Record<PaymentStatus, string> = {
-  idle: '',
-  requesting: 'Requesting content...',
-  payment_required: 'Payment required (402)',
-  analyzing: 'AI analyzing payment...',
-  signing: 'Signing transaction...',
-  retrying: 'Retrying with payment...',
-  success: 'Content delivered!',
-  error: 'Request failed',
-};
+const SELLER_URL = 'https://dkqgvbdj13uv7.cloudfront.net';
 
-export function ContentRequest({ walletConnected, onRequestContent }: ContentRequestProps) {
+type FlowStep = 'idle' | 'requesting' | 'payment_required' | 'confirming' | 'paying' | 'showing_data' | 'complete' | 'error';
+
+export function ContentRequest({ walletConnected }: ContentRequestProps) {
   const [selectedItem, setSelectedItem] = useState<ContentItem | null>(null);
-  const [status, setStatus] = useState<PaymentStatus>('idle');
-  const [paymentRequirement, setPaymentRequirement] = useState<PaymentRequirement | null>(null);
-  const [result, setResult] = useState<ContentResult | null>(null);
-  const [transactionDetails, setTransactionDetails] = useState<TransactionDetails | null>(null);
-  const [agentReasoning, setAgentReasoning] = useState<string>('');
-  const [stepTimings, setStepTimings] = useState<Record<string, number>>({});
-  const [flowStartTime, setFlowStartTime] = useState<number | null>(null);
-  const [totalElapsed, setTotalElapsed] = useState<number>(0);
+  const [flowStep, setFlowStep] = useState<FlowStep>('idle');
+  const [debugLogs, setDebugLogs] = useState<DebugLogEntry[]>([]);
+  const [agentResponse, setAgentResponse] = useState<string | null>(null);
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [paymentDetails, setPaymentDetails] = useState<PaymentDetails | null>(null);
+  const [purchasedContent, setPurchasedContent] = useState<string | null>(null);
+
+  const addLog = (type: DebugLogEntry['type'], title: string, data: unknown) => {
+    setDebugLogs(prev => [...prev, {
+      timestamp: new Date().toISOString(),
+      type,
+      title,
+      data,
+    }]);
+  };
 
   const handleSelectContent = (item: ContentItem) => {
     setSelectedItem(item);
-    setStatus('idle');
-    setPaymentRequirement(null);
-    setResult(null);
-    setTransactionDetails(null);
-    setAgentReasoning('');
-    setStepTimings({});
-    setFlowStartTime(null);
-    setTotalElapsed(0);
+    setFlowStep('idle');
+    setDebugLogs([]);
+    setAgentResponse(null);
+    setPaymentDetails(null);
+    setPurchasedContent(null);
   };
 
-  const recordStepTiming = (stepStatus: PaymentStatus, startTime: number) => {
-    const duration = Date.now() - startTime;
-    setStepTimings(prev => ({ ...prev, [stepStatus]: duration }));
-    setTotalElapsed(Date.now() - (flowStartTime || Date.now()));
+  const callAgent = async (message: string): Promise<{ completion?: string; error?: string; session_id?: string }> => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout
+
+    try {
+      addLog('request', 'Agent Request', { message: message.substring(0, 100) + '...' });
+
+      const response = await fetch(`${API_ENDPOINT}/invoke`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message, session_id: sessionId }),
+        signal: controller.signal,
+      });
+      
+      clearTimeout(timeoutId);
+      addLog('info', 'Response Status', { status: response.status });
+
+      const responseText = await response.text();
+      
+      try {
+        const data = JSON.parse(responseText);
+        addLog('response', 'Agent Response', data);
+        return data;
+      } catch {
+        addLog('error', 'Parse Error', { raw: responseText.substring(0, 500) });
+        return { error: 'Failed to parse response' };
+      }
+    } catch (error) {
+      clearTimeout(timeoutId);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const isAborted = error instanceof Error && error.name === 'AbortError';
+      const isNetworkError = errorMessage === 'Failed to fetch';
+      
+      addLog('error', 'Request Failed', { error: errorMessage, aborted: isAborted });
+      
+      if (isAborted) {
+        return { error: 'Request timed out after 60 seconds' };
+      } else if (isNetworkError) {
+        return { error: 'Network error - API Gateway may have timed out (29s limit). The request may still be processing.' };
+      }
+      return { error: errorMessage };
+    }
   };
 
+  // Step 1: Request content (expect 402)
   const handleRequestContent = async () => {
     if (!selectedItem || !walletConnected) return;
 
-    // Reset state
-    setResult(null);
-    setAgentReasoning('');
-    setStepTimings({});
-    const startTime = Date.now();
-    setFlowStartTime(startTime);
+    setFlowStep('requesting');
+    setDebugLogs([]);
+    setAgentResponse(null);
+    setPaymentDetails(null);
 
-    // Simulate the x402 payment flow
-    try {
-      // Step 1: Initial request
-      let stepStart = Date.now();
-      setStatus('requesting');
-      await simulateDelay(800);
-      recordStepTiming('requesting', stepStart);
+    const contentUrl = `${SELLER_URL}${selectedItem.path}`;
+    const message = `Use the request_content tool to fetch content from ${contentUrl}. Just make the request and tell me what you get back - do NOT proceed with payment yet.`;
 
-      // Step 2: Receive 402 Payment Required
-      stepStart = Date.now();
-      setStatus('payment_required');
-      setPaymentRequirement({
-        scheme: 'exact',
-        network: 'base-sepolia',
-        amount: selectedItem.price,
-        asset: 'USDC',
-        payTo: '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb',
-      });
-      await simulateDelay(1000);
-      recordStepTiming('payment_required', stepStart);
+    const result = await callAgent(message);
+    
+    if (result.session_id) setSessionId(result.session_id);
 
-      // Step 3: AI analyzes payment
-      stepStart = Date.now();
-      setStatus('analyzing');
-      setAgentReasoning('Analyzing payment request... Amount is within acceptable range. Recipient address verified. Proceeding with payment.');
-      await simulateDelay(1500);
-      recordStepTiming('analyzing', stepStart);
+    if (result.error) {
+      setFlowStep('error');
+      setAgentResponse(`Error: ${result.error}`);
+      return;
+    }
 
-      // Step 4: Sign transaction
-      stepStart = Date.now();
-      setStatus('signing');
-      setAgentReasoning(prev => prev + '\n\nSigning transaction with AgentKit wallet...');
-      await simulateDelay(1200);
-      recordStepTiming('signing', stepStart);
+    // Check if response indicates 402 / payment required
+    const completion = result.completion || '';
+    setAgentResponse(completion);
 
-      // Step 5: Retry with payment
-      stepStart = Date.now();
-      setStatus('retrying');
-      await simulateDelay(800);
-      recordStepTiming('retrying', stepStart);
-
-      // Step 6: Success
-      stepStart = Date.now();
-      setStatus('success');
-      setTotalElapsed(Date.now() - startTime);
+    // Try to extract payment details from the response
+    // The agent should return structured info about the 402
+    if (completion.toLowerCase().includes('402') || 
+        completion.toLowerCase().includes('payment required') ||
+        completion.toLowerCase().includes('payment_required')) {
       
-      // If callback provided, use it; otherwise use mock data
-      if (onRequestContent) {
-        const contentResult = await onRequestContent(selectedItem);
-        setResult(contentResult);
-        
-        // Create transaction details from result
-        if (contentResult.transactionHash && paymentRequirement) {
-          setTransactionDetails({
-            hash: contentResult.transactionHash,
-            network: paymentRequirement.network,
-            amount: paymentRequirement.amount,
-            asset: paymentRequirement.asset,
-            recipient: paymentRequirement.payTo,
-            timestamp: new Date(),
-            status: 'confirmed',
-            blockNumber: Math.floor(Math.random() * 1000000) + 15000000,
-            gasUsed: `${Math.floor(Math.random() * 50000) + 21000}`,
-          });
-        }
-      } else {
-        // Mock successful response
-        const mockHash = `0x${generateMockHash()}`;
-        const mockPaymentReq = {
+      // Parse payment details from agent response
+      // Look for amount, recipient, network info
+      const amountMatch = completion.match(/amount[:\s]+["']?(\d+(?:\.\d+)?)/i) || 
+                          completion.match(/(\d+)\s*(?:atomic units|wei)/i);
+      const recipientMatch = completion.match(/(?:recipient|payTo)[:\s]+["']?(0x[a-fA-F0-9]{40})/i);
+      const networkMatch = completion.match(/network[:\s]+["']?([^"'\s,}]+)/i);
+      
+      if (amountMatch || recipientMatch) {
+        setPaymentDetails({
           scheme: 'exact',
-          network: 'base-sepolia',
-          amount: selectedItem.price,
-          asset: 'USDC',
-          payTo: '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb',
-        };
-        
-        setResult({
-          content: getMockContent(selectedItem.id),
-          transactionHash: mockHash,
-        });
-        
-        // Set transaction details for the confirmation display
-        setTransactionDetails({
-          hash: mockHash,
-          network: mockPaymentReq.network,
-          amount: mockPaymentReq.amount,
-          asset: mockPaymentReq.asset,
-          recipient: mockPaymentReq.payTo,
-          timestamp: new Date(),
-          status: 'confirmed',
-          blockNumber: Math.floor(Math.random() * 1000000) + 15000000,
-          gasUsed: `${Math.floor(Math.random() * 50000) + 21000}`,
+          network: networkMatch?.[1] || 'eip155:84532',
+          amount: amountMatch?.[1] || selectedItem.price,
+          asset: '0x036CbD53842c5426634e7929541eC2318f3dCF7e',
+          currency: 'USDC',
+          recipient: recipientMatch?.[1] || '',
+          description: selectedItem.title,
+          maxTimeoutSeconds: 60,
         });
       }
-      recordStepTiming('success', stepStart);
-    } catch (error) {
-      setStatus('error');
-      setResult({
-        error: error instanceof Error ? error.message : 'Unknown error occurred',
-      });
+      setFlowStep('payment_required');
+    } else if (completion.toLowerCase().includes('200') || 
+               completion.toLowerCase().includes('success')) {
+      // Content was free or already paid
+      setFlowStep('complete');
+    } else {
+      // Unknown state - show response and let user decide
+      setFlowStep('payment_required');
     }
+  };
+
+  // Step 2: Confirm and execute payment
+  const handleConfirmPayment = async () => {
+    if (!selectedItem || !walletConnected) return;
+
+    setFlowStep('paying');
+
+    const contentUrl = `${SELLER_URL}${selectedItem.path}`;
+    const message = `The content at ${contentUrl} requires payment. Please:
+1. Sign the payment using sign_payment tool
+2. Then use request_content_with_payment to send the signed payment and get the content
+
+Proceed with the payment now.`;
+
+    const result = await callAgent(message);
+    
+    if (result.session_id) setSessionId(result.session_id);
+
+    if (result.error) {
+      setFlowStep('error');
+      setAgentResponse(prev => (prev ? prev + '\n\n' : '') + `Payment Error: ${result.error}`);
+      return;
+    }
+
+    setAgentResponse(prev => (prev ? prev + '\n\n--- Payment Result ---\n\n' : '') + (result.completion || ''));
+    
+    // Check if payment succeeded
+    const completion = result.completion || '';
+    if (completion.toLowerCase().includes('200') || 
+        completion.toLowerCase().includes('success') ||
+        completion.toLowerCase().includes('content') ||
+        completion.toLowerCase().includes('delivered')) {
+      // Payment succeeded - move to showing data step
+      setFlowStep('showing_data');
+    } else {
+      setFlowStep('error');
+    }
+  };
+
+  // Step 3: Show the purchased content
+  const handleShowContent = async () => {
+    if (!selectedItem) return;
+
+    setFlowStep('requesting'); // Reuse requesting state for loading indicator
+
+    const message = `Please present the content data you just received from the successful payment in a clean, readable format. Show me the actual data/content that was purchased.`;
+
+    const result = await callAgent(message);
+    
+    if (result.session_id) setSessionId(result.session_id);
+
+    if (result.error) {
+      setFlowStep('error');
+      setAgentResponse(prev => (prev ? prev + '\n\n' : '') + `Error: ${result.error}`);
+      return;
+    }
+
+    setPurchasedContent(result.completion || 'No content received');
+    setFlowStep('complete');
   };
 
   const handleReset = () => {
     setSelectedItem(null);
-    setStatus('idle');
-    setPaymentRequirement(null);
-    setResult(null);
-    setTransactionDetails(null);
-    setAgentReasoning('');
-    setStepTimings({});
-    setFlowStartTime(null);
-    setTotalElapsed(0);
+    setFlowStep('idle');
+    setDebugLogs([]);
+    setAgentResponse(null);
+    setSessionId(null);
+    setPaymentDetails(null);
+    setPurchasedContent(null);
   };
+
+  const isLoading = flowStep === 'requesting' || flowStep === 'paying';
 
   return (
     <div className="content-request">
       <div className="content-header">
         <h3>Premium Content</h3>
-        <p>Select content to purchase with x402 payment</p>
+        <p>Select content to purchase via x402 payment (step-by-step)</p>
       </div>
 
-      {/* Content Selection */}
       <div className="content-grid">
         {AVAILABLE_CONTENT.map((item) => (
           <button
             key={item.id}
             className={`content-card ${selectedItem?.id === item.id ? 'selected' : ''}`}
             onClick={() => handleSelectContent(item)}
-            disabled={status !== 'idle' && status !== 'success' && status !== 'error'}
+            disabled={isLoading}
           >
             <div className="content-card-title">{item.title}</div>
             <div className="content-card-description">{item.description}</div>
@@ -271,7 +319,6 @@ export function ContentRequest({ walletConnected, onRequestContent }: ContentReq
         ))}
       </div>
 
-      {/* Selected Content Details */}
       {selectedItem && (
         <div className="selected-content">
           <div className="selected-info">
@@ -279,298 +326,115 @@ export function ContentRequest({ walletConnected, onRequestContent }: ContentReq
             <span className="selected-price">
               {selectedItem.price} {selectedItem.currency}
             </span>
+            <span className="flow-status">
+              {flowStep === 'idle' && '📋 Ready to request'}
+              {flowStep === 'requesting' && '🔄 Requesting content...'}
+              {flowStep === 'payment_required' && '💳 Payment required - confirm to proceed'}
+              {flowStep === 'paying' && '💸 Processing payment...'}
+              {flowStep === 'showing_data' && '📦 Payment complete - view your content'}
+              {flowStep === 'complete' && '✅ Complete!'}
+              {flowStep === 'error' && '❌ Error occurred'}
+            </span>
           </div>
           
-          {status === 'idle' && (
-            <button
-              className="request-btn"
-              onClick={handleRequestContent}
-              disabled={!walletConnected}
-            >
-              {walletConnected ? 'Request Content' : 'Connect Wallet First'}
-            </button>
-          )}
-
-          {(status === 'success' || status === 'error') && (
-            <button className="reset-btn" onClick={handleReset}>
-              Request Another
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* Payment Flow Status */}
-      {status !== 'idle' && (
-        <div className="payment-flow">
-          <div className="flow-header">
-            <h4>Payment Flow</h4>
-            <div className="flow-header-right">
-              {totalElapsed > 0 && (
-                <span className="total-elapsed">Total: {totalElapsed}ms</span>
-              )}
-              <span className={`status-badge status-${status}`}>
-                {STATUS_MESSAGES[status]}
-              </span>
-            </div>
-          </div>
-
-          {/* Progress Bar */}
-          <div className="flow-progress-bar">
-            <div 
-              className="flow-progress-fill" 
-              style={{ width: `${getProgressPercentage(status)}%` }}
-            />
-          </div>
-
-          {/* Enhanced Flow Steps */}
-          <div className="flow-steps-enhanced">
-            {FLOW_STEP_CONFIG.map((config, index) => (
-              <FlowStep
-                key={config.status}
-                step={index + 1}
-                label={config.label}
-                description={config.description}
-                icon={config.icon}
-                status={getStepStatus(status, config.status)}
-                duration={stepTimings[config.status]}
-              />
-            ))}
-          </div>
-
-          {/* Payment Requirement Details */}
-          {paymentRequirement && (
-            <div className="payment-details">
-              <h5>Payment Requirement</h5>
-              <div className="payment-details-grid">
-                <div className="detail-item">
-                  <span className="detail-label">Amount</span>
-                  <span className="detail-value highlight">
-                    {paymentRequirement.amount} {paymentRequirement.asset}
-                  </span>
-                </div>
-                <div className="detail-item">
-                  <span className="detail-label">Network</span>
-                  <span className="detail-value">{paymentRequirement.network}</span>
-                </div>
-                <div className="detail-item">
-                  <span className="detail-label">Scheme</span>
-                  <span className="detail-value">{paymentRequirement.scheme}</span>
-                </div>
-                <div className="detail-item full-width">
-                  <span className="detail-label">Recipient</span>
-                  <span className="detail-value address">{paymentRequirement.payTo}</span>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Agent Reasoning */}
-          {agentReasoning && (
-            <div className="agent-reasoning">
-              <h5>🤖 Agent Reasoning</h5>
-              <pre>{agentReasoning}</pre>
-            </div>
-          )}
-
-          {/* Result */}
-          {result && (
-            <div className={`result ${result.error ? 'result-error' : 'result-success'}`}>
-              {result.error ? (
-                <div className="error-message">
-                  <span className="error-icon">❌</span>
-                  {result.error}
-                </div>
-              ) : (
-                <>
-                  {/* Transaction Confirmation Display */}
-                  {transactionDetails && (
-                    <TransactionConfirmation 
-                      transaction={transactionDetails}
-                      showDetails={true}
-                    />
-                  )}
-                  
-                  {/* Content Preview */}
-                  {result.content && (
-                    <div className="content-preview">
-                      <h5>Content Preview</h5>
-                      <pre>{JSON.stringify(result.content, null, 2)}</pre>
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// Flow step component with enhanced visualization
-interface FlowStepProps {
-  step: number;
-  label: string;
-  description: string;
-  status: 'pending' | 'active' | 'complete' | 'error';
-  icon: string;
-  duration?: number;
-}
-
-function FlowStep({ step, label, description, status, icon, duration }: FlowStepProps) {
-  return (
-    <div className={`flow-step-enhanced flow-step-${status}`}>
-      <div className="step-connector">
-        <div className="connector-line" />
-      </div>
-      <div className="step-content">
-        <div className="step-icon-wrapper">
-          <div className="step-icon">
-            {status === 'complete' ? '✓' : status === 'error' ? '✗' : icon}
-          </div>
-          {status === 'active' && <div className="step-pulse" />}
-        </div>
-        <div className="step-info">
-          <div className="step-header">
-            <span className="step-number">Step {step}</span>
-            {duration !== undefined && status === 'complete' && (
-              <span className="step-duration">{duration}ms</span>
+          <div className="action-buttons">
+            {flowStep === 'idle' && (
+              <button
+                className="request-btn"
+                onClick={handleRequestContent}
+                disabled={!walletConnected}
+              >
+                Step 1: Request Content
+              </button>
+            )}
+            
+            {flowStep === 'payment_required' && (
+              <button
+                className="confirm-btn"
+                onClick={handleConfirmPayment}
+                disabled={!walletConnected}
+              >
+                Step 2: Confirm Payment ({selectedItem.price} USDC)
+              </button>
+            )}
+            
+            {flowStep === 'showing_data' && (
+              <button
+                className="show-content-btn"
+                onClick={handleShowContent}
+                disabled={!walletConnected}
+              >
+                Step 3: View Purchased Content
+              </button>
+            )}
+            
+            {(flowStep === 'complete' || flowStep === 'error') && (
+              <button className="reset-btn" onClick={handleReset}>
+                Start Over
+              </button>
+            )}
+            
+            {flowStep !== 'idle' && flowStep !== 'complete' && flowStep !== 'error' && (
+              <button className="reset-btn" onClick={handleReset} disabled={isLoading}>
+                Cancel
+              </button>
             )}
           </div>
-          <span className="step-label-enhanced">{label}</span>
-          <span className="step-description">{description}</span>
         </div>
-      </div>
+      )}
+
+      {paymentDetails && flowStep === 'payment_required' && (
+        <div className="payment-details">
+          <h5>Payment Details (from 402 response)</h5>
+          <div className="payment-details-grid">
+            <div className="detail-item">
+              <span className="detail-label">Amount</span>
+              <span className="detail-value highlight">{selectedItem?.price} USDC</span>
+            </div>
+            <div className="detail-item">
+              <span className="detail-label">Network</span>
+              <span className="detail-value">{paymentDetails.network}</span>
+            </div>
+            <div className="detail-item">
+              <span className="detail-label">Recipient</span>
+              <span className="detail-value address">{paymentDetails.recipient || 'From 402 response'}</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {agentResponse && (
+        <div className="agent-response">
+          <h4>🤖 Agent Response</h4>
+          <pre>{agentResponse}</pre>
+        </div>
+      )}
+
+      {purchasedContent && (
+        <div className="purchased-content">
+          <h4>📄 Purchased Content</h4>
+          <pre>{purchasedContent}</pre>
+        </div>
+      )}
+
+      {debugLogs.length > 0 && (
+        <div className="debug-logs">
+          <h4>📋 Debug Log</h4>
+          {debugLogs.map((log, index) => (
+            <div key={index} className={`debug-entry debug-${log.type}`}>
+              <div className="debug-header">
+                <span className="debug-type">{log.type.toUpperCase()}</span>
+                <span className="debug-title">{log.title}</span>
+              </div>
+              <pre className="debug-data">
+                {typeof log.data === 'string' ? log.data : JSON.stringify(log.data, null, 2)}
+              </pre>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
-}
-
-// Step configuration with icons and descriptions
-const FLOW_STEP_CONFIG: Array<{
-  status: PaymentStatus;
-  label: string;
-  description: string;
-  icon: string;
-}> = [
-  {
-    status: 'requesting',
-    label: 'Request Content',
-    description: 'Sending initial HTTP request to seller',
-    icon: '📤',
-  },
-  {
-    status: 'payment_required',
-    label: '402 Payment Required',
-    description: 'Server requires payment for access',
-    icon: '💳',
-  },
-  {
-    status: 'analyzing',
-    label: 'AI Analysis',
-    description: 'Agent evaluating payment terms',
-    icon: '🤖',
-  },
-  {
-    status: 'signing',
-    label: 'Sign Payment',
-    description: 'Creating cryptographic signature',
-    icon: '✍️',
-  },
-  {
-    status: 'retrying',
-    label: 'Retry with Payment',
-    description: 'Resending request with payment proof',
-    icon: '🔄',
-  },
-  {
-    status: 'success',
-    label: 'Content Delivered',
-    description: 'Payment verified, content received',
-    icon: '✅',
-  },
-];
-
-// Helper functions
-function simulateDelay(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-function generateMockHash(): string {
-  return Array.from({ length: 64 }, () => 
-    Math.floor(Math.random() * 16).toString(16)
-  ).join('');
-}
-
-function getStepStatus(
-  currentStatus: PaymentStatus, 
-  stepStatus: PaymentStatus
-): 'pending' | 'active' | 'complete' | 'error' {
-  const statusOrder: PaymentStatus[] = [
-    'requesting', 'payment_required', 'analyzing', 'signing', 'retrying', 'success'
-  ];
-  
-  if (currentStatus === 'error') {
-    const currentIndex = statusOrder.indexOf(stepStatus);
-    const errorIndex = statusOrder.indexOf(currentStatus);
-    if (currentIndex < errorIndex) return 'complete';
-    if (currentIndex === errorIndex) return 'error';
-    return 'pending';
-  }
-  
-  const currentIndex = statusOrder.indexOf(currentStatus);
-  const stepIndex = statusOrder.indexOf(stepStatus);
-  
-  if (stepIndex < currentIndex) return 'complete';
-  if (stepIndex === currentIndex) return 'active';
-  return 'pending';
-}
-
-function getProgressPercentage(status: PaymentStatus): number {
-  const statusProgress: Record<PaymentStatus, number> = {
-    idle: 0,
-    requesting: 10,
-    payment_required: 25,
-    analyzing: 45,
-    signing: 65,
-    retrying: 85,
-    success: 100,
-    error: 0,
-  };
-  return statusProgress[status] || 0;
-}
-
-function getMockContent(contentId: string): unknown {
-  const mockContent: Record<string, unknown> = {
-    'premium-article': {
-      title: 'The Future of AI and Blockchain Integration',
-      author: 'Tech Insights',
-      date: new Date().toISOString().split('T')[0],
-      summary: 'AI and blockchain are converging to create unprecedented opportunities...',
-      tags: ['AI', 'blockchain', 'technology'],
-    },
-    'weather-data': {
-      location: 'San Francisco, CA',
-      temperature: 68,
-      conditions: 'Partly Cloudy',
-      humidity: 45,
-      forecast: 'Clear skies expected',
-    },
-    'market-analysis': {
-      timestamp: new Date().toISOString(),
-      btcPrice: '$98,234.56',
-      ethPrice: '$3,845.12',
-      sentiment: 'Bullish',
-      summary: 'Markets showing positive momentum',
-    },
-    'research-report': {
-      title: 'Blockchain Technology Trends 2026',
-      pages: 45,
-      summary: 'Comprehensive analysis of emerging blockchain trends...',
-      highlights: ['DeFi growth', 'Layer 2 adoption', 'Enterprise blockchain'],
-    },
-  };
-  
-  return mockContent[contentId] || { message: 'Content delivered successfully' };
 }
 
 export default ContentRequest;

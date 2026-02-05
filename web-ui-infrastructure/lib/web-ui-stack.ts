@@ -49,16 +49,14 @@ export class WebUiStack extends cdk.Stack {
     apiHandler.addToRolePolicy(new iam.PolicyStatement({
       effect: iam.Effect.ALLOW,
       actions: ['bedrock-agentcore:InvokeAgentRuntime'],
-      resources: [
-        agentRuntimeArn || '*',
-        `${agentRuntimeArn}/runtime-endpoint/*`,
-      ],
+      resources: ['*'],  // AgentCore requires wildcard or specific runtime-endpoint paths
     }));
 
-    // API Gateway
+    // API Gateway with proper IAM controls (no open Lambda policies)
+    // Note: API Gateway has 29s timeout limit - complex payment flows may timeout
     const api = new apigateway.RestApi(this, 'WebUiApi', {
       restApiName: 'x402-web-ui-api',
-      description: 'API proxy for x402 web UI to AgentCore Runtime',
+      description: 'API proxy for x402 web UI to AgentCore Runtime (29s timeout limit)',
       defaultCorsPreflightOptions: {
         allowOrigins: apigateway.Cors.ALL_ORIGINS,
         allowMethods: apigateway.Cors.ALL_METHODS,
@@ -134,12 +132,7 @@ export class WebUiStack extends cdk.Stack {
 
     new cdk.CfnOutput(this, 'ApiEndpoint', {
       value: api.url,
-      description: 'API Gateway endpoint for AgentCore proxy',
-    });
-
-    new cdk.CfnOutput(this, 'WebUiBucketName', {
-      value: websiteBucket.bucketName,
-      description: 'Web UI S3 Bucket',
+      description: 'API Gateway endpoint (29s timeout limit)',
     });
 
     new cdk.CfnOutput(this, 'DistributionId', {

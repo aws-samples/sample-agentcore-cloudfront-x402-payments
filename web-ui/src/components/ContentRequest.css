@@ -3,7 +3,8 @@
   border-radius: 12px;
   padding: 1.5rem;
   min-width: 400px;
-  max-width: 600px;
+  max-width: 700px;
+  margin: 0 auto;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
   border: 1px solid rgba(255, 255, 255, 0.1);
 }
@@ -25,10 +26,10 @@
   color: rgba(255, 255, 255, 0.5);
 }
 
-/* Content Grid */
+/* Content Grid - 3 columns for 6 items */
 .content-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 0.75rem;
   margin-bottom: 1.5rem;
 }
@@ -106,6 +107,12 @@
 .selected-price {
   font-size: 0.85rem;
   color: #4caf50;
+}
+
+.flow-status {
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.6);
+  margin-top: 0.25rem;
 }
 
 .request-btn,
@@ -961,5 +968,322 @@
 
   .reconnect-btn:hover {
     background: rgba(0, 0, 0, 0.1);
+  }
+}
+
+/* Debug Logs */
+.debug-logs {
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 1rem;
+  margin-top: 1.5rem;
+  max-height: 500px;
+  overflow-y: auto;
+}
+
+.debug-logs h4 {
+  margin: 0 0 0.5rem 0;
+  font-size: 0.9rem;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.debug-logs .debug-hint {
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.5);
+  margin: 0 0 1rem 0;
+}
+
+.debug-entry {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 6px;
+  padding: 0.75rem;
+  margin-bottom: 0.75rem;
+  border-left: 3px solid rgba(255, 255, 255, 0.2);
+}
+
+.debug-entry.debug-request {
+  border-left-color: #646cff;
+}
+
+.debug-entry.debug-response {
+  border-left-color: #4caf50;
+}
+
+.debug-entry.debug-info {
+  border-left-color: #ffc107;
+}
+
+.debug-entry.debug-error {
+  border-left-color: #f44336;
+  background: rgba(244, 67, 54, 0.1);
+}
+
+.debug-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.debug-type {
+  font-size: 0.65rem;
+  font-weight: 600;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.debug-request .debug-type {
+  background: rgba(100, 108, 255, 0.2);
+  color: #646cff;
+}
+
+.debug-response .debug-type {
+  background: rgba(76, 175, 80, 0.2);
+  color: #4caf50;
+}
+
+.debug-info .debug-type {
+  background: rgba(255, 193, 7, 0.2);
+  color: #ffc107;
+}
+
+.debug-error .debug-type {
+  background: rgba(244, 67, 54, 0.2);
+  color: #f44336;
+}
+
+.debug-title {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+  flex: 1;
+}
+
+.debug-time {
+  font-size: 0.65rem;
+  color: rgba(255, 255, 255, 0.4);
+  font-family: 'Monaco', 'Menlo', monospace;
+}
+
+.debug-data {
+  margin: 0;
+  font-size: 0.7rem;
+  font-family: 'Monaco', 'Menlo', monospace;
+  color: rgba(255, 255, 255, 0.7);
+  background: rgba(0, 0, 0, 0.2);
+  padding: 0.75rem;
+  border-radius: 4px;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+/* Agent Response */
+.agent-response {
+  background: rgba(100, 108, 255, 0.1);
+  border: 1px solid rgba(100, 108, 255, 0.2);
+  border-radius: 8px;
+  padding: 1rem;
+  margin-top: 1rem;
+}
+
+.agent-response h4 {
+  margin: 0 0 0.75rem 0;
+  font-size: 0.9rem;
+  color: #646cff;
+}
+
+.agent-response pre {
+  margin: 0;
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.9);
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.5;
+}
+
+/* Session Info */
+.session-info {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
+  margin-top: 1rem;
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.6);
+  font-family: 'Monaco', 'Menlo', monospace;
+}
+
+.session-info strong {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+/* Seller URL */
+.seller-url {
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.4);
+  font-family: 'Monaco', 'Menlo', monospace;
+  margin-top: 0.5rem;
+}
+
+/* Content Card Path */
+.content-card-path {
+  font-size: 0.7rem;
+  color: rgba(255, 255, 255, 0.4);
+  font-family: 'Monaco', 'Menlo', monospace;
+  margin-top: 0.5rem;
+}
+
+/* Action Buttons */
+.action-buttons {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.confirm-btn {
+  background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%);
+  border: none;
+  color: white;
+  padding: 0.75rem 1.5rem;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.confirm-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(76, 175, 80, 0.4);
+}
+
+.confirm-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.show-content-btn {
+  background: linear-gradient(135deg, #2196f3 0%, #1565c0 100%);
+  border: none;
+  color: white;
+  padding: 0.75rem 1.5rem;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.show-content-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(33, 150, 243, 0.4);
+}
+
+.show-content-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Purchased Content Display */
+.purchased-content {
+  background: rgba(33, 150, 243, 0.1);
+  border: 1px solid rgba(33, 150, 243, 0.3);
+  border-radius: 8px;
+  padding: 1rem;
+  margin-top: 1rem;
+}
+
+.purchased-content h4 {
+  margin: 0 0 0.75rem 0;
+  font-size: 0.9rem;
+  color: #2196f3;
+}
+
+.purchased-content pre {
+  margin: 0;
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.9);
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.5;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+/* Light mode support for purchased content */
+@media (prefers-color-scheme: light) {
+  .purchased-content {
+    background: rgba(33, 150, 243, 0.08);
+    border-color: rgba(33, 150, 243, 0.3);
+  }
+
+  .purchased-content pre {
+    color: #333;
+  }
+}
+
+/* Light mode support for debug logs */
+@media (prefers-color-scheme: light) {
+  .debug-logs {
+    background: rgba(0, 0, 0, 0.05);
+    border-color: rgba(0, 0, 0, 0.1);
+  }
+
+  .debug-logs h4 {
+    color: #333;
+  }
+
+  .debug-logs .debug-hint {
+    color: rgba(0, 0, 0, 0.5);
+  }
+
+  .debug-entry {
+    background: rgba(0, 0, 0, 0.02);
+  }
+
+  .debug-entry.debug-error {
+    background: rgba(244, 67, 54, 0.08);
+  }
+
+  .debug-title {
+    color: #333;
+  }
+
+  .debug-time {
+    color: rgba(0, 0, 0, 0.4);
+  }
+
+  .debug-data {
+    background: rgba(0, 0, 0, 0.05);
+    color: #333;
+  }
+
+  .agent-response {
+    background: rgba(100, 108, 255, 0.08);
+    border-color: rgba(100, 108, 255, 0.2);
+  }
+
+  .agent-response pre {
+    color: #333;
+  }
+
+  .session-info {
+    background: rgba(0, 0, 0, 0.03);
+    color: rgba(0, 0, 0, 0.6);
+  }
+
+  .session-info strong {
+    color: #333;
+  }
+
+  .seller-url,
+  .content-card-path {
+    color: rgba(0, 0, 0, 0.4);
   }
 }

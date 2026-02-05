@@ -85,9 +85,10 @@ const DEFAULT_ASSET = '0x036CbD53842c5426634e7929541eC2318f3dCF7e';
 
 /**
  * Default S3 bucket for content storage
- * This should match your deployed S3 bucket name
+ * This is the CDK-generated bucket name from the X402SellerStack deployment
+ * Lambda@Edge doesn't support environment variables, so this must be hardcoded
  */
-const DEFAULT_CONTENT_BUCKET = 'x402-content-bucket';
+const DEFAULT_CONTENT_BUCKET = 'x402sellerstack-contentbucket52d4b12c-h81ogh04nmda';
 
 /**
  * Creates default payment requirements with optional overrides
@@ -125,6 +126,47 @@ export const DEFAULT_CONTENT_REGISTRY: ContentRegistry = {
   defaultNetwork: DEFAULT_NETWORK,
   defaultAsset: DEFAULT_ASSET,
   items: {
+    // Root-level content paths (for direct access)
+    '/research-report': {
+      id: 'research-report',
+      path: '/research-report',
+      title: 'Blockchain Research Report',
+      description: 'In-depth research report on blockchain technology trends',
+      mimeType: 'application/json',
+      pricing: createPaymentRequirements('5000'),
+      source: {
+        type: 's3',
+        bucket: DEFAULT_CONTENT_BUCKET,
+        key: 'research-report',
+      },
+    },
+    '/dataset': {
+      id: 'dataset',
+      path: '/dataset',
+      title: 'Premium Dataset',
+      description: 'Curated dataset for machine learning and analytics',
+      mimeType: 'application/json',
+      pricing: createPaymentRequirements('10000'),
+      source: {
+        type: 's3',
+        bucket: DEFAULT_CONTENT_BUCKET,
+        key: 'dataset',
+      },
+    },
+    '/tutorial': {
+      id: 'tutorial',
+      path: '/tutorial',
+      title: 'Advanced Smart Contract Tutorial',
+      description: 'Step-by-step guide to building advanced smart contracts',
+      mimeType: 'application/json',
+      pricing: createPaymentRequirements('3000'),
+      source: {
+        type: 's3',
+        bucket: DEFAULT_CONTENT_BUCKET,
+        key: 'tutorial',
+      },
+    },
+    // API-prefixed paths (for backwards compatibility)
     '/api/premium-article': {
       id: 'premium-article',
       path: '/api/premium-article',
@@ -168,9 +210,9 @@ export const DEFAULT_CONTENT_REGISTRY: ContentRegistry = {
         generator: 'market',
       },
     },
-    // S3-backed content items
+    // S3-backed content items with /api/ prefix
     '/api/research-report': {
-      id: 'research-report',
+      id: 'api-research-report',
       path: '/api/research-report',
       title: 'Blockchain Research Report',
       description: 'In-depth research report on blockchain technology trends',
@@ -179,11 +221,11 @@ export const DEFAULT_CONTENT_REGISTRY: ContentRegistry = {
       source: {
         type: 's3',
         bucket: DEFAULT_CONTENT_BUCKET,
-        key: 'content/research-report.json',
+        key: 'research-report',
       },
     },
     '/api/dataset': {
-      id: 'dataset',
+      id: 'api-dataset',
       path: '/api/dataset',
       title: 'Premium Dataset',
       description: 'Curated dataset for machine learning and analytics',
@@ -192,11 +234,11 @@ export const DEFAULT_CONTENT_REGISTRY: ContentRegistry = {
       source: {
         type: 's3',
         bucket: DEFAULT_CONTENT_BUCKET,
-        key: 'content/dataset.json',
+        key: 'dataset',
       },
     },
     '/api/tutorial': {
-      id: 'tutorial',
+      id: 'api-tutorial',
       path: '/api/tutorial',
       title: 'Advanced Smart Contract Tutorial',
       description: 'Step-by-step guide to building advanced smart contracts',
@@ -205,7 +247,7 @@ export const DEFAULT_CONTENT_REGISTRY: ContentRegistry = {
       source: {
         type: 's3',
         bucket: DEFAULT_CONTENT_BUCKET,
-        key: 'content/tutorial.json',
+        key: 'tutorial',
       },
     },
   },

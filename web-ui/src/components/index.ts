@@ -4,9 +4,7 @@ export type { WalletInfo } from './WalletDisplay';
 export { ContentRequest } from './ContentRequest';
 export type { 
   ContentItem, 
-  PaymentStatus, 
-  PaymentRequirement, 
-  ContentResult 
+  DebugLogEntry 
 } from './ContentRequest';
 
 export { ContentRequestWithGateway } from './ContentRequestWithGateway';
