@@ -37,6 +37,7 @@
   flex-direction: column;
   align-items: center;
   gap: 1.5rem;
+  width: 100%;
 }
 
 .content-section {
@@ -101,5 +102,38 @@
   .app-main {
     flex-direction: column;
     align-items: center;
+  }
+}
+
+/* Footer */
+.app-footer {
+  margin-top: 3rem;
+  padding-top: 2rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  text-align: center;
+}
+
+.repo-link {
+  color: rgba(255, 255, 255, 0.6);
+  text-decoration: none;
+  font-size: 0.95rem;
+  transition: color 0.2s ease;
+}
+
+.repo-link:hover {
+  color: #646cff;
+}
+
+@media (prefers-color-scheme: light) {
+  .app-footer {
+    border-top-color: rgba(0, 0, 0, 0.1);
+  }
+
+  .repo-link {
+    color: rgba(0, 0, 0, 0.5);
+  }
+
+  .repo-link:hover {
+    color: #646cff;
   }
 }

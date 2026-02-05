@@ -45,7 +45,7 @@ function App() {
     <div className="app">
       <header className="app-header">
         <h1>x402 Payment Demo</h1>
-        <p>AI-powered content payments on AWS</p>
+        <p>AI-powered content payments on AWS using Bedrock AgentCore, Lambda, and CloudFront</p>
       </header>
 
       <main className="app-main">
@@ -64,6 +64,17 @@ function App() {
           <ContentRequest walletConnected={!!wallet} />
         </section>
       </main>
+
+      <footer className="app-footer">
+        <a 
+          href="https://github.com/joshuamarksmith/x402-agentcore-demo" 
+          target="_blank" 
+          rel="noopener noreferrer"
+          className="repo-link"
+        >
+          Explore the Project →
+        </a>
+      </footer>
     </div>
   );
 }

@@ -31,11 +31,6 @@ export function WalletDisplay({ wallet, isLoading = false, onRefresh }: WalletDi
     }
   };
 
-  const truncateAddress = (address: string) => {
-    if (address.length <= 12) return address;
-    return `${address.slice(0, 6)}...${address.slice(-4)}`;
-  };
-
   const formatBalance = (balance: string, currency: string) => {
     const num = parseFloat(balance);
     if (isNaN(num)) return `0 ${currency}`;
@@ -71,10 +66,10 @@ export function WalletDisplay({ wallet, isLoading = false, onRefresh }: WalletDi
         <button 
           className="wallet-address" 
           onClick={copyAddress}
-          title={wallet.address}
+          title="Click to copy"
           aria-label={`Copy address ${wallet.address}`}
         >
-          {truncateAddress(wallet.address)}
+          {wallet.address}
           <span className="copy-icon">{copied ? '✓' : '📋'}</span>
         </button>
         {copied && <span className="copied-tooltip">Copied!</span>}
