@@ -70,16 +70,26 @@ AgentCore Gateway acts as an MCP tool server:
 
 ## Payment Flow
 
-1. Client sends request to agent
-2. Agent discovers content tools via MCP from Gateway
-3. Agent invokes tool (routed to CloudFront)
-4. Lambda@Edge returns `402 Payment Required` with x402 headers
-5. Agent analyzes payment requirements
-6. Agent signs payment with AgentKit wallet (EIP-3009)
-7. Agent retries with `X-PAYMENT-SIGNATURE` header
-8. Lambda@Edge verifies signature via x402 facilitator
-9. Facilitator settles payment on-chain
-10. Content returned with transaction hash
+The Web UI guides users through a 3-step payment process:
+
+1. **Step 1: Request Content**
+   - User selects content item
+   - Agent requests content from CloudFront
+   - Lambda@Edge returns `402 Payment Required` with x402 headers
+   - Agent analyzes payment requirements and reports back
+
+2. **Step 2: Confirm Payment**
+   - User confirms payment
+   - Agent signs payment with AgentKit wallet (EIP-3009)
+   - Agent retries request with `X-PAYMENT` header
+   - Lambda@Edge verifies signature via x402 facilitator
+   - Facilitator settles payment on-chain
+   - Agent confirms successful payment
+
+3. **Step 3: View Content**
+   - User clicks to view purchased content
+   - Agent presents the content data in readable format
+   - Transaction hash available for block explorer verification
 
 ## Stack
 
@@ -143,7 +153,7 @@ This project deploys **two separate CloudFront distributions** for different pur
 | `seller-infrastructure` | Payment-gated API (returns 402, verifies payments) | AI Agent |
 | `web-ui-infrastructure` | Static React app hosting | Browser |
 
-The Web UI (browser) → Agent → Seller API. Users never call the Seller API directly.
+The Web UI (browser) → Agent → Seller API for ease of use.
 
 ### Deployed URLs
 
@@ -268,15 +278,15 @@ python scripts/invoke_gateway.py "Get me the premium article"
 
 ## Web UI
 
-Features:
-- Wallet display with balance
-- Content selection
-- Payment flow visualization
-- Agent reasoning display
-- Real-time event stream
-- Transaction confirmation with block explorer links
+The React frontend provides a step-by-step interface for the x402 payment flow:
 
-Supports demo mode (simulated) and live mode (real Gateway).
+- **Wallet Display**: Shows agent wallet address and USDC balance on Base Sepolia
+- **Content Grid**: 6 content items with pricing (0.0005 - 0.01 USDC)
+- **3-Step Flow**: Request → Pay → View, each step is a separate agent call
+- **Debug Panel**: Shows HTTP requests/responses for transparency
+- **Agent Response**: Displays agent reasoning at each step
+
+The step-by-step approach keeps each API call under the 29-second timeout limit while providing clear visibility into the payment process.
 
 ## Tests
 

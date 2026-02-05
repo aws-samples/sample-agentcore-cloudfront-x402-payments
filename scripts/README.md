@@ -93,35 +93,25 @@ AWS_REGION=us-east-1
 PAYMENT_RECIPIENT_ADDRESS=0x...
 ```
 
-### web-ui/.env (optional - for live mode)
+### web-ui/.env
 
 ```bash
-VITE_GATEWAY_ENDPOINT=https://your-gateway-url
-VITE_AWS_REGION=us-west-2
-VITE_AGENT_ID=your-agent-id
-VITE_AUTH_METHOD=proxy
+VITE_API_ENDPOINT=https://your-api-gateway.execute-api.region.amazonaws.com/prod/
 ```
-
-> **Note**: The Web UI works in demo mode without any configuration.
 
 ## Running the Web UI
 
-The Web UI can run in two modes:
+After deployment, the Web UI connects to the AgentCore API Gateway:
 
-### Demo Mode (default)
-No backend required - simulates the entire x402 payment flow:
 ```bash
 cd web-ui
 npm run dev
 # Open http://localhost:5173
 ```
 
-### Live Mode
-Requires deployed AgentCore Gateway:
+Configure `web-ui/.env` with your deployed endpoints:
 ```bash
-# Configure web-ui/.env with your Gateway endpoint
-cd web-ui
-npm run dev
+VITE_API_ENDPOINT=https://your-api-gateway.execute-api.region.amazonaws.com/prod/
 ```
 
 ## Troubleshooting

@@ -262,7 +262,7 @@ print_next_steps() {
     echo "6. Run the payer agent locally:"
     echo "   cd payer-agent && source .venv/bin/activate && python -m agent.main"
     echo ""
-    echo "7. Run the Web UI (demo mode - no backend required):"
+    echo "7. Run the Web UI locally:"
     echo "   cd web-ui && npm run dev"
     echo ""
     echo -e "${GREEN}Setup complete!${NC}"

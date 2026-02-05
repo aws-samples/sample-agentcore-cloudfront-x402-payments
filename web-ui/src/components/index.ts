@@ -7,8 +7,6 @@ export type {
   DebugLogEntry 
 } from './ContentRequest';
 
-export { ContentRequestWithGateway } from './ContentRequestWithGateway';
-
 export { TransactionConfirmation } from './TransactionConfirmation';
 export type { TransactionDetails } from './TransactionConfirmation';
 

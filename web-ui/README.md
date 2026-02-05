@@ -4,11 +4,35 @@ React frontend for the x402 payment-gated content demo.
 
 ## Features
 
-- Wallet balance display
-- Content selection with pricing
-- Real-time payment flow visualization
-- Agent reasoning display
+- Wallet balance display with real-time refresh
+- Content selection with pricing (6 content items)
+- 3-step payment flow:
+  1. **Request Content** - Fetches content, receives 402 Payment Required
+  2. **Confirm Payment** - Signs and submits payment via AgentKit wallet
+  3. **View Content** - Displays the purchased content data
+- Agent reasoning display showing each step
+- Debug log panel with HTTP request/response details
 - Transaction confirmation with block explorer links
+
+## Payment Flow
+
+The UI guides users through a step-by-step payment process:
+
+```
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│  Step 1:        │     │  Step 2:        │     │  Step 3:        │
+│  Request        │────▶│  Confirm        │────▶│  View           │
+│  Content        │     │  Payment        │     │  Content        │
+│                 │     │                 │     │                 │
+│  Agent requests │     │  Agent signs    │     │  Agent presents │
+│  content, gets  │     │  payment and    │     │  the purchased  │
+│  402 response   │     │  retries with   │     │  data in a      │
+│                 │     │  X-PAYMENT      │     │  readable       │
+│                 │     │  header         │     │  format         │
+└─────────────────┘     └─────────────────┘     └─────────────────┘
+```
+
+Each step is a separate API call, keeping requests under the 29-second API Gateway timeout.
 
 ## Setup
 
@@ -32,12 +56,6 @@ Edit `.env`:
 ```bash
 # API endpoint (Lambda proxy to AgentCore)
 VITE_API_ENDPOINT=https://<api-id>.execute-api.<region>.amazonaws.com/prod/
-
-# AWS region
-VITE_AWS_REGION=us-west-2
-
-# Agent ID (from AgentCore deployment)
-VITE_AGENT_ID=<your-agent-id>
 ```
 
 ## Build
@@ -48,17 +66,12 @@ npm run build
 
 Output goes to `dist/` for deployment.
 
-## Modes
-
-- **Demo Mode**: Simulated responses (no AWS required)
-- **Live Mode**: Real AgentCore invocation via API Gateway
-
 ## Stack
 
 - React 18
 - TypeScript
 - Vite
-- CSS Modules
+- CSS
 
 ## License
 

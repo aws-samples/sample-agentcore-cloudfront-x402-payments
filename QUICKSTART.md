@@ -15,18 +15,6 @@ Also required:
 - AWS account with Bedrock AgentCore access
 - [Coinbase Developer Platform](https://portal.cdp.coinbase.com/) API keys
 
-## Demo Mode (No AWS)
-
-Run the Web UI in demo mode without deploying anything:
-
-```bash
-git clone https://github.com/joshuamarksmith/x402-agentcore-demo.git
-cd x402-agentcore-demo/web-ui
-npm install
-npm run dev
-# Open http://localhost:5173
-```
-
 ## Full Deployment
 
 ### Step 1: Clone (2 min)

@@ -139,7 +139,7 @@ check_web_ui() {
     if [ -f "$PROJECT_ROOT/web-ui/.env" ]; then
         print_success ".env file exists"
     else
-        print_warning ".env file not found (optional for demo mode)"
+        print_warning ".env file not found"
         ((WARNINGS++))
     fi
     
