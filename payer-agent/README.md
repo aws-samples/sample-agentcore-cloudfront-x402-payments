@@ -131,19 +131,16 @@ python scripts/deploy_to_agentcore.py
 
 This will:
 1. Build a Docker image with all dependencies
-2. Push to ECR (`633890776779.dkr.ecr.us-west-2.amazonaws.com/x402-payer-agent`)
+2. Push to ECR
 3. Create/update the AgentCore Runtime
 
-Current Runtime ARN:
-```
-arn:aws:bedrock-agentcore:us-west-2:633890776779:runtime/x402PayerAgent-ZRET5yCgTk
-```
+The deployment script outputs the Runtime ARN, which you'll need for invocation.
 
 ### Test Invocation
 
 ```bash
 python scripts/test_agent_invocation.py \
-    --runtime-arn "arn:aws:bedrock-agentcore:us-west-2:633890776779:runtime/x402PayerAgent-ZRET5yCgTk" \
+    --runtime-arn "<YOUR_RUNTIME_ARN>" \
     --message "What services are available?"
 ```
 
