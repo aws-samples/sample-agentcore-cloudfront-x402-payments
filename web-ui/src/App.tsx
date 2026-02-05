@@ -1,34 +1,44 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { WalletDisplay, ContentRequest } from './components';
 import type { WalletInfo } from './components';
 import './App.css';
 
-// Demo wallet data for Base Sepolia testnet
-const DEMO_WALLET: WalletInfo = {
-  address: '0x742d35Cc6634C0532925a3b844Bc9e7595f8fE21',
-  balance: '0.015432',
-  network: 'Base Sepolia',
-  currency: 'ETH',
-};
+const API_ENDPOINT = import.meta.env.VITE_API_ENDPOINT || 'http://localhost:8080';
 
 function App() {
-  const [wallet, setWallet] = useState<WalletInfo | undefined>(DEMO_WALLET);
-  const [isLoading, setIsLoading] = useState(false);
+  const [wallet, setWallet] = useState<WalletInfo | undefined>(undefined);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchWallet = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const response = await fetch(`${API_ENDPOINT}/wallet`);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch wallet: ${response.statusText}`);
+      }
+      const data = await response.json();
+      setWallet({
+        address: data.address,
+        balance: data.balance,
+        network: data.network,
+        currency: data.currency,
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load wallet');
+      setWallet(undefined);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchWallet();
+  }, [fetchWallet]);
 
   const handleRefresh = () => {
-    setIsLoading(true);
-    // Simulate wallet refresh
-    setTimeout(() => {
-      setWallet({
-        ...DEMO_WALLET,
-        balance: (Math.random() * 0.1).toFixed(6),
-      });
-      setIsLoading(false);
-    }, 1000);
-  };
-
-  const toggleWallet = () => {
-    setWallet(wallet ? undefined : DEMO_WALLET);
+    fetchWallet();
   };
 
   return (
@@ -40,15 +50,13 @@ function App() {
 
       <main className="app-main">
         <section className="wallet-section">
-          <h2>Wallet</h2>
+          <h2>Agent Wallet</h2>
+          {error && <div className="wallet-error">{error}</div>}
           <WalletDisplay 
             wallet={wallet} 
             isLoading={isLoading}
             onRefresh={handleRefresh}
           />
-          <button className="toggle-btn" onClick={toggleWallet}>
-            {wallet ? 'Disconnect Wallet' : 'Connect Wallet'}
-          </button>
         </section>
 
         <section className="content-section">

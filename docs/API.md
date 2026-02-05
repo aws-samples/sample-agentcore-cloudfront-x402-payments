@@ -339,7 +339,7 @@ Base64-encoded JSON containing payment requirements:
       "network": "eip155:84532",
       "amount": "1000",
       "asset": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
-      "payTo": "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb",
+      "payTo": "<SELLER_WALLET_ADDRESS>",
       "maxTimeoutSeconds": 60,
       "extra": {
         "name": "USDC",
@@ -364,14 +364,14 @@ Base64-encoded JSON containing the signed payment:
     "network": "eip155:84532",
     "amount": "1000",
     "asset": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
-    "payTo": "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb",
+    "payTo": "<SELLER_WALLET_ADDRESS>",
     "maxTimeoutSeconds": 60
   },
   "payload": {
     "signature": "0x...",
     "authorization": {
       "from": "0x...",
-      "to": "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb",
+      "to": "<SELLER_WALLET_ADDRESS>",
       "value": "1000",
       "validAfter": "0",
       "validBefore": "1737561600",
@@ -1698,7 +1698,7 @@ curl -X POST "https://<gateway-url>/v1/mcp/invoke" \
         "network": "eip155:84532",
         "amount": "1000",
         "asset": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
-        "payTo": "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb",
+        "payTo": "<SELLER_WALLET_ADDRESS>",
         "maxTimeoutSeconds": 60,
         "extra": {
           "name": "USDC",

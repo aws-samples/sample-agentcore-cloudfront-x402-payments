@@ -99,40 +99,74 @@ AgentCore Gateway acts as an MCP tool server:
 
 ```
 x402-agentcore-demo/
-├── payer-agent/              # AI Agent (Python)
-│   ├── agent/                # Strands agent implementation
+├── payer-agent/              # AI Agent (Python) - Strands agent with AgentKit wallet
+│   ├── agent/                # Agent implementation & tools
 │   ├── openapi/              # OpenAPI specs for Gateway targets
 │   ├── scripts/              # Deployment & test scripts
-│   ├── tests/                # Test suite
-│   ├── agentcore_config.yaml
-│   └── gateway_config.yaml
+│   └── tests/                # Test suite (355 tests)
 │
-├── payer-infrastructure/     # AgentCore CDK Stack
+├── payer-infrastructure/     # CDK Stack for AgentCore Runtime
 │   └── lib/
 │       ├── agentcore-stack.ts
 │       └── observability-stack.ts
 │
-├── seller-infrastructure/    # CloudFront CDK Stack
+├── seller-infrastructure/    # CDK Stack for x402 Payment API ← Agent calls this
 │   ├── lib/
 │   │   ├── cloudfront-stack.ts
 │   │   └── lambda-edge/
-│   │       └── payment-verifier.ts
-│   └── content/              # Sample content
+│   │       ├── payment-verifier.ts  # x402 payment verification
+│   │       └── content-config.ts    # Content & pricing config
+│   └── content/              # S3-backed content files
 │
-├── web-ui/                   # React Demo Interface
+├── web-ui/                   # React Frontend (Vite + TypeScript)
 │   └── src/
-│       ├── api/
-│       ├── components/
-│       └── hooks/
+│       ├── api/              # Agent & Gateway clients
+│       ├── components/       # UI components
+│       └── hooks/            # React hooks
+│
+├── web-ui-infrastructure/    # CDK Stack for Web UI hosting ← Browser loads this
+│   └── lib/
+│       ├── web-ui-stack.ts   # CloudFront + S3 + API Gateway
+│       └── lambda/           # API proxy for AgentCore
 │
 ├── docs/                     # Documentation
-│   ├── AGENTCORE.md
-│   ├── API.md
-│   └── TROUBLESHOOTING.md
-│
-├── x402/                     # x402 protocol (cloned)
-└── agentkit/                 # Coinbase AgentKit (cloned)
+├── x402/                     # x402 protocol (git submodule)
+└── agentkit/                 # Coinbase AgentKit (git submodule)
 ```
+
+### Two CloudFront Distributions
+
+This project deploys **two separate CloudFront distributions** for different purposes:
+
+| Stack | CloudFront Purpose | Called By |
+|-------|-------------------|-----------|
+| `seller-infrastructure` | Payment-gated API (returns 402, verifies payments) | AI Agent |
+| `web-ui-infrastructure` | Static React app hosting | Browser |
+
+The Web UI (browser) → Agent → Seller API. Users never call the Seller API directly.
+
+### Deployed URLs
+
+After deployment, you'll have URLs for each component:
+
+| Component | URL Pattern | Purpose |
+|-----------|-------------|---------|
+| Web UI | `https://<distribution-id>.cloudfront.net` | React frontend |
+| Content API | `https://<distribution-id>.cloudfront.net` | x402-protected endpoints |
+| API Gateway | `https://<api-id>.execute-api.<region>.amazonaws.com/prod/` | AgentCore proxy |
+
+Get your URLs from CDK deployment outputs or CloudFormation console.
+
+### Wallet Addresses (Base Sepolia Testnet)
+
+Wallets are created during setup:
+
+| Role | Source | Description |
+|------|--------|-------------|
+| Payer (Agent) | CDP API | Created automatically by AgentKit |
+| Seller | CDP API or your own | Configure in `seller-infrastructure/.env` |
+
+To create a seller wallet via CDP, see [Creating a Seller Wallet](#creating-a-seller-wallet) below.
 
 ## Agent Tools
 
@@ -145,14 +179,16 @@ Built-in tools:
 | `sign_payment` | Sign payment (EIP-3009) |
 | `request_faucet_funds` | Request testnet tokens |
 
-MCP tools (discovered via Gateway):
+MCP tools (discovered via Gateway at `/mcp/tools`):
 
-| Tool | Price (USDC) |
-|------|--------------|
-| `get_premium_article` | 0.001 |
-| `get_weather_data` | 0.0005 |
-| `get_market_analysis` | 0.002 |
-| `get_research_report` | 0.005 |
+| Tool | Price (USDC) | Description |
+|------|--------------|-------------|
+| `get_premium_article` | 0.001 | AI/blockchain article |
+| `get_weather_data` | 0.0005 | Weather conditions |
+| `get_market_analysis` | 0.002 | Crypto market data |
+| `get_research_report` | 0.005 | Blockchain research |
+| `get_dataset` | 0.01 | ML dataset |
+| `get_tutorial` | 0.003 | Smart contract tutorial |
 
 ## Prerequisites
 
@@ -277,6 +313,19 @@ pytest tests/test_error_scenarios.py -v   # Error handling
 - [Bedrock AgentCore Documentation](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/)
 - [Coinbase AgentKit Documentation](https://docs.cdp.coinbase.com/agentkit/docs/welcome)
 - [EIP-3009: Transfer With Authorization](https://eips.ethereum.org/EIPS/eip-3009)
+
+## Creating a Seller Wallet
+
+You need a wallet address on Base Sepolia to receive payments. Options:
+
+1. **CDP Portal** (recommended): Create at [portal.cdp.coinbase.com](https://portal.cdp.coinbase.com/)
+2. **MetaMask**: Add Base Sepolia network and use your address
+3. **CDP API**: Use the AgentKit SDK to create programmatically
+
+Set your wallet address in `seller-infrastructure/.env`:
+```bash
+PAYMENT_RECIPIENT_ADDRESS=<YOUR_WALLET_ADDRESS>
+```
 
 ## License
 

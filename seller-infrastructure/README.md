@@ -1,6 +1,23 @@
-# x402 Seller Infrastructure
+# Seller Infrastructure (x402 Payment Gateway)
 
-AWS CDK stack for the seller side — CloudFront distribution with Lambda@Edge payment verification.
+CloudFront distribution that acts as the **payment-gated content API** - the "seller" in the x402 protocol.
+
+## What This Is
+
+This is the **backend API** that the AI agent calls to fetch paid content.
+
+```
+┌─────────────┐         ┌─────────────────────────────┐
+│  AI Agent   │ ──────▶ │  This CloudFront (Seller)   │
+│  (Payer)    │   HTTP  │  - Returns 402 + price      │
+│             │ ◀────── │  - Verifies payment         │
+│             │         │  - Serves content           │
+└─────────────┘         └─────────────────────────────┘
+```
+
+Endpoints like `/api/premium-article` return:
+- **402 Payment Required** (no payment) with x402 headers
+- **200 OK** (valid payment) with content
 
 ## Architecture
 

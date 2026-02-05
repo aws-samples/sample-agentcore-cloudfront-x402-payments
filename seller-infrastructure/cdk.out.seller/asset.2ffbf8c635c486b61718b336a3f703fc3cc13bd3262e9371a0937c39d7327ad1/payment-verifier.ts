@@ -171,8 +171,7 @@ function generateRequestId(): string {
 
 // Facilitator URL for payment verification
 // Note: Lambda@Edge doesn't support environment variables, so this is bundled
-// Using www subdomain to avoid 308 redirect (x402.org redirects to www.x402.org)
-const FACILITATOR_URL = 'https://www.x402.org/facilitator';
+const FACILITATOR_URL = 'https://x402.org/facilitator';
 
 // Seller wallet address to receive payments
 // This wallet receives x402 payments on Base Sepolia

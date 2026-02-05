@@ -66,8 +66,13 @@ Edit `seller-infrastructure/.env`:
 ```bash
 AWS_ACCOUNT_ID=123456789012
 AWS_REGION=us-east-1
-PAYMENT_RECIPIENT_ADDRESS=0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb
+PAYMENT_RECIPIENT_ADDRESS=<YOUR_SELLER_WALLET_ADDRESS>
 ```
+
+To create a seller wallet, you can:
+1. Use an existing Base Sepolia wallet address
+2. Create one via [CDP Portal](https://portal.cdp.coinbase.com/) 
+3. Use MetaMask or another wallet on Base Sepolia testnet
 
 ### Step 3: Deploy Seller (10 min)
 
