@@ -319,6 +319,7 @@ pytest tests/test_error_scenarios.py -v   # Error handling
 ## References
 
 - [x402 Protocol Specification](https://github.com/coinbase/x402/tree/main/specs)
+- [x402 CloudFront + Lambda@Edge Example](https://github.com/coinbase/x402/tree/main/examples/typescript/servers/cloudfront-lambda-edge) — the seller infrastructure in this project is based on this example
 - [Strands Agents Documentation](https://strandsagents.com/latest/documentation/docs/)
 - [Bedrock AgentCore Documentation](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/)
 - [Coinbase AgentKit Documentation](https://docs.cdp.coinbase.com/agentkit/docs/welcome)

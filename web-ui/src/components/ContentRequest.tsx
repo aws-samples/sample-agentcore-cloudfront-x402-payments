@@ -86,7 +86,7 @@ const AVAILABLE_CONTENT: ContentItem[] = [
   },
 ];
 
-const SELLER_URL = 'https://dkqgvbdj13uv7.cloudfront.net';
+const SELLER_URL = import.meta.env.VITE_SELLER_URL || 'https://dkqgvbdj13uv7.cloudfront.net';
 
 type FlowStep = 'idle' | 'requesting' | 'payment_required' | 'confirming' | 'paying' | 'showing_data' | 'complete' | 'error';
 

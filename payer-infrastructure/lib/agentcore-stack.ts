@@ -364,8 +364,8 @@ export class AgentCoreStack extends cdk.Stack {
         'sts:AssumeRole',
       ],
       resources: [
-        // Allow assuming roles with x402-gateway-target prefix in any account
-        'arn:aws:iam::*:role/x402-gateway-target-*',
+        // Scoped to this account — add additional account IDs here for multi-account setups
+        `arn:aws:iam::${this.account}:role/x402-gateway-target-*`,
       ],
       conditions: {
         StringEquals: {

@@ -49,7 +49,9 @@ export class WebUiStack extends cdk.Stack {
     apiHandler.addToRolePolicy(new iam.PolicyStatement({
       effect: iam.Effect.ALLOW,
       actions: ['bedrock-agentcore:InvokeAgentRuntime'],
-      resources: ['*'],  // AgentCore requires wildcard or specific runtime-endpoint paths
+      resources: agentRuntimeArn
+        ? [agentRuntimeArn]
+        : ['*'],  // Fallback to wildcard only if ARN not provided
     }));
 
     // API Gateway with proper IAM controls (no open Lambda policies)

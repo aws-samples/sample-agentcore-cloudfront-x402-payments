@@ -107,6 +107,9 @@ def invoke_agent(event):
     if not prompt:
         return cors_response(400, {'error': 'prompt or message field required'})
     
+    # Basic input sanitization
+    prompt = sanitize_prompt(prompt)
+    
     session_id = body.get('session_id') or f"web-{uuid.uuid4().hex[:8]}-{uuid.uuid4().hex}"
     
     if len(session_id) < 33:
@@ -156,6 +159,19 @@ def invoke_agent(event):
             'error': str(e),
             'session_id': session_id,
         })
+
+
+MAX_PROMPT_LENGTH = 4000
+
+def sanitize_prompt(prompt: str) -> str:
+    """Basic sanitization: enforce length limit and strip control characters."""
+    prompt = prompt[:MAX_PROMPT_LENGTH]
+    # Strip control characters (keep newlines and tabs for formatting)
+    prompt = ''.join(
+        ch for ch in prompt
+        if ch in ('\n', '\t') or (ord(ch) >= 32)
+    )
+    return prompt.strip()
 
 
 def cors_response(status_code, body):
