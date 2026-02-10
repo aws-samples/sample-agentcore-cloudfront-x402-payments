@@ -115,11 +115,11 @@ cd web-ui
 npm run dev
 ```
 
-For live mode, configure `web-ui/.env`:
+Configure `web-ui/.env`:
 ```bash
-VITE_GATEWAY_ENDPOINT=https://your-gateway-url
+VITE_API_ENDPOINT=https://your-api-gateway-url/prod/
 VITE_AWS_REGION=us-west-2
-VITE_AGENT_ID=your-agent-id
+VITE_SELLER_URL=https://your-seller-distribution.cloudfront.net
 ```
 
 ## MCP Tools

@@ -233,7 +233,7 @@ cp seller-infrastructure/.env.example seller-infrastructure/.env
 
 # Web UI
 cp web-ui/.env.example web-ui/.env
-# Set VITE_GATEWAY_ENDPOINT, VITE_AWS_REGION, VITE_AGENT_ID
+# Set VITE_API_ENDPOINT, VITE_AWS_REGION, VITE_SELLER_URL
 ```
 
 ### 3. Deploy seller infrastructure
