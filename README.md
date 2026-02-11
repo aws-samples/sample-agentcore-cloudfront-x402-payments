@@ -241,7 +241,7 @@ git clone https://github.com/coinbase/agentkit.git
 cp payer-agent/.env.example payer-agent/.env
 # Edit payer-agent/.env → set CDP_API_KEY_ID, CDP_API_KEY_SECRET, CDP_WALLET_SECRET
 
-# Seller infrastructure - set your AWS account/region and wallet address
+# Seller infrastructure - set your wallet address
 cp seller-infrastructure/.env.example seller-infrastructure/.env
 # Edit seller-infrastructure/.env → set PAYMENT_RECIPIENT_ADDRESS
 ```
