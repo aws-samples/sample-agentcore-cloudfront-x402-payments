@@ -10,6 +10,7 @@ Get the x402 payment demo running in under 30 minutes.
 | Python | 3.10+ | `python3 --version` |
 | AWS CLI | 2.x | `aws --version` |
 | AWS CDK | 2.x | `cdk --version` |
+| Docker | 20+ | `docker --version` |
 
 Also required:
 - AWS account with Bedrock AgentCore access
@@ -54,7 +55,11 @@ Edit `seller-infrastructure/.env`:
 ```bash
 AWS_ACCOUNT_ID=123456789012
 AWS_REGION=us-east-1
-PAYMENT_RECIPIENT_ADDRESS=<YOUR_SELLER_WALLET_ADDRESS>
+```
+
+Set your wallet address in `seller-infrastructure/lib/lambda-edge/content-config.ts`:
+```typescript
+const DEFAULT_PAY_TO = '<YOUR_SELLER_WALLET_ADDRESS>';
 ```
 
 To create a seller wallet, you can:
@@ -72,7 +77,7 @@ npx cdk deploy
 
 Note the CloudFront URL from output:
 ```
-X402SellerStack.X402DistributionUrl = https://dXXXXXXXXXXXXX.cloudfront.net
+X402SellerStack.DistributionUrl = https://dXXXXXXXXXXXXX.cloudfront.net
 ```
 
 Update `payer-agent/.env` with the CloudFront URL:
@@ -115,16 +120,23 @@ pytest tests/ -v
 
 ### Step 7: Web UI (Optional)
 
-```bash
-cd web-ui
-npm run dev
-```
-
 Configure `web-ui/.env.local`:
 ```bash
-VITE_API_ENDPOINT=https://your-api-gateway-url/prod/
-VITE_AWS_REGION=us-west-2
+VITE_API_ENDPOINT=http://localhost:8080
+VITE_AWS_REGION=us-east-1
 VITE_SELLER_URL=https://your-seller-distribution.cloudfront.net
+```
+
+Start the backend API server and frontend in separate terminals:
+```bash
+# Terminal 1: Backend
+cd payer-agent
+source .venv/bin/activate
+python -m agent.api_server
+
+# Terminal 2: Frontend
+cd web-ui
+npm run dev
 ```
 
 ## MCP Tools

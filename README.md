@@ -113,7 +113,7 @@ x402-agentcore-demo/
 │   ├── agent/                # Agent implementation & tools
 │   ├── openapi/              # OpenAPI specs for Gateway targets
 │   ├── scripts/              # Deployment & test scripts
-│   └── tests/                # Test suite (350 tests)
+│   └── tests/                # Test suite (355 tests)
 │
 ├── payer-infrastructure/     # CDK Stack for AgentCore Runtime
 │   └── lib/
@@ -243,7 +243,7 @@ cp payer-agent/.env.example payer-agent/.env
 
 # Seller infrastructure - set your payment recipient wallet
 cp seller-infrastructure/.env.example seller-infrastructure/.env
-# Edit seller-infrastructure/.env → set PAYMENT_RECIPIENT_ADDRESS
+# Edit seller-infrastructure/lib/lambda-edge/content-config.ts → set DEFAULT_PAY_TO to your wallet address
 ```
 
 ### 3. Deploy seller infrastructure
@@ -266,6 +266,7 @@ Note the CloudFront URL from the output (`X402DistributionUrl`), then update you
 ```bash
 cd payer-infrastructure
 npm install
+export X402_SELLER_CLOUDFRONT_URL=https://dXXXXXXXXXXXXX.cloudfront.net  # from step 3
 npx cdk bootstrap  # First time only
 npx cdk deploy --all
 ```
@@ -379,9 +380,9 @@ You need a wallet address on Base Sepolia to receive payments. Options:
 2. **MetaMask**: Add Base Sepolia network and use your address
 3. **CDP API**: Use the AgentKit SDK to create programmatically
 
-Set your wallet address in `seller-infrastructure/.env`:
-```bash
-PAYMENT_RECIPIENT_ADDRESS=<YOUR_WALLET_ADDRESS>
+Set your wallet address in `seller-infrastructure/lib/lambda-edge/content-config.ts`:
+```typescript
+const DEFAULT_PAY_TO = '<YOUR_WALLET_ADDRESS>';
 ```
 
 ## License
