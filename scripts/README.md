@@ -77,10 +77,11 @@ After running setup, configure these files:
 ### payer-agent/.env
 
 ```bash
-AWS_REGION=us-west-2
-BEDROCK_MODEL_ID=anthropic.claude-3-sonnet-20240229-v1:0
-CDP_API_KEY_NAME=your_key_name
-CDP_API_KEY_PRIVATE_KEY=your_private_key
+AWS_REGION=us-east-1
+BEDROCK_MODEL_ID=anthropic.claude-sonnet-4-20250514-v1:0
+CDP_API_KEY_ID=your_cdp_api_key_id
+CDP_API_KEY_SECRET=your_cdp_api_key_secret
+CDP_WALLET_SECRET=your_cdp_wallet_secret
 NETWORK_ID=base-sepolia
 SELLER_API_URL=https://your-cloudfront.cloudfront.net
 ```
@@ -97,10 +98,12 @@ Set wallet address in `seller-infrastructure/lib/lambda-edge/content-config.ts`:
 const DEFAULT_PAY_TO = '0x...';
 ```
 
-### web-ui/.env
+### web-ui/.env.local
 
 ```bash
-VITE_API_ENDPOINT=https://your-api-gateway.execute-api.region.amazonaws.com/prod/
+VITE_API_ENDPOINT=http://localhost:8080
+VITE_AWS_REGION=us-east-1
+VITE_SELLER_URL=https://your-seller-distribution.cloudfront.net
 ```
 
 ## Running the Web UI
@@ -113,9 +116,11 @@ npm run dev
 # Open http://localhost:5173
 ```
 
-Configure `web-ui/.env` with your deployed endpoints:
+Configure `web-ui/.env.local` with your deployed endpoints:
 ```bash
-VITE_API_ENDPOINT=https://your-api-gateway.execute-api.region.amazonaws.com/prod/
+VITE_API_ENDPOINT=http://localhost:8080
+VITE_AWS_REGION=us-east-1
+VITE_SELLER_URL=https://your-seller-distribution.cloudfront.net
 ```
 
 ## Troubleshooting

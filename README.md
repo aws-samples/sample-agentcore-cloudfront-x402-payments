@@ -175,7 +175,7 @@ Wallets are created during setup:
 | Role | Source | Description |
 |------|--------|-------------|
 | Payer (Agent) | CDP API | Created automatically by AgentKit |
-| Seller | CDP API or your own | Configure in `seller-infrastructure/.env` |
+| Seller | CDP API or your own | Configure in `seller-infrastructure/lib/lambda-edge/content-config.ts` |
 
 To create a seller wallet via CDP, see [Creating a Seller Wallet](#creating-a-seller-wallet) below.
 
@@ -241,8 +241,9 @@ git clone https://github.com/coinbase/agentkit.git
 cp payer-agent/.env.example payer-agent/.env
 # Edit payer-agent/.env → set CDP_API_KEY_ID, CDP_API_KEY_SECRET, CDP_WALLET_SECRET
 
-# Seller infrastructure - set your payment recipient wallet
+# Seller infrastructure - set your AWS account/region for CDK deployment
 cp seller-infrastructure/.env.example seller-infrastructure/.env
+# Edit seller-infrastructure/.env → set AWS_ACCOUNT_ID
 # Edit seller-infrastructure/lib/lambda-edge/content-config.ts → set DEFAULT_PAY_TO to your wallet address
 ```
 
