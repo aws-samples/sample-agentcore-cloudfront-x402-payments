@@ -10,6 +10,9 @@ export class X402SellerStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
+    // Unique suffix for policy names to avoid conflicts on redeploy
+    const suffix = cdk.Names.uniqueId(this).slice(-8);
+
     // Create S3 bucket for static content (optional)
     const contentBucket = new s3.Bucket(this, 'ContentBucket', {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
@@ -52,7 +55,7 @@ export class X402SellerStack extends cdk.Stack {
       this,
       'PaymentApiCachePolicy',
       {
-        cachePolicyName: 'X402-PaymentApi-NoCache',
+        cachePolicyName: `X402-PaymentApi-NoCache-${suffix}`,
         comment: 'No caching for x402 payment-protected endpoints',
         defaultTtl: cdk.Duration.seconds(0),
         minTtl: cdk.Duration.seconds(0),
@@ -70,7 +73,7 @@ export class X402SellerStack extends cdk.Stack {
       this,
       'StaticAssetsCachePolicy',
       {
-        cachePolicyName: 'X402-StaticAssets-LongCache',
+        cachePolicyName: `X402-StaticAssets-LongCache-${suffix}`,
         comment: 'Long-term caching for static assets that do not require payment',
         defaultTtl: cdk.Duration.days(1),
         minTtl: cdk.Duration.seconds(1),
@@ -89,7 +92,7 @@ export class X402SellerStack extends cdk.Stack {
       this,
       'PublicContentCachePolicy',
       {
-        cachePolicyName: 'X402-PublicContent-ShortCache',
+        cachePolicyName: `X402-PublicContent-ShortCache-${suffix}`,
         comment: 'Short-term caching for public content pages',
         defaultTtl: cdk.Duration.minutes(5),
         minTtl: cdk.Duration.seconds(1),
@@ -112,7 +115,7 @@ export class X402SellerStack extends cdk.Stack {
       this,
       'PaymentApiOriginRequestPolicy',
       {
-        originRequestPolicyName: 'X402-PaymentApi-ForwardHeaders',
+        originRequestPolicyName: `X402-PaymentApi-ForwardHeaders-${suffix}`,
         comment: 'Forward payment headers to origin for x402 verification',
         headerBehavior: cloudfront.OriginRequestHeaderBehavior.allowList(
           'X-Payment-Signature',
@@ -133,7 +136,7 @@ export class X402SellerStack extends cdk.Stack {
       this,
       'ResponseHeadersPolicy',
       {
-        responseHeadersPolicyName: 'X402-ResponseHeaders',
+        responseHeadersPolicyName: `X402-ResponseHeaders-${suffix}`,
         comment: 'CORS and x402 payment response headers',
         corsBehavior: {
           accessControlAllowOrigins: ['*'],

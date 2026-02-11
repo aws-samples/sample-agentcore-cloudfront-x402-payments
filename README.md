@@ -113,7 +113,7 @@ x402-agentcore-demo/
 │   ├── agent/                # Agent implementation & tools
 │   ├── openapi/              # OpenAPI specs for Gateway targets
 │   ├── scripts/              # Deployment & test scripts
-│   └── tests/                # Test suite (355 tests)
+│   └── tests/                # Test suite (350 tests)
 │
 ├── payer-infrastructure/     # CDK Stack for AgentCore Runtime
 │   └── lib/
@@ -139,9 +139,10 @@ x402-agentcore-demo/
 │       ├── web-ui-stack.ts   # CloudFront + S3 + API Gateway
 │       └── lambda/           # API proxy for AgentCore
 │
+├── scripts/                  # Setup & verification scripts
 ├── docs/                     # Documentation
-├── x402/                     # x402 protocol (git submodule)
-└── agentkit/                 # Coinbase AgentKit (git submodule)
+├── x402/                     # x402 protocol (cloned dependency)
+└── agentkit/                 # Coinbase AgentKit (cloned dependency)
 ```
 
 ### Two CloudFront Distributions
@@ -188,6 +189,16 @@ Built-in tools:
 | `analyze_payment` | Analyze payment requirements |
 | `sign_payment` | Sign payment (EIP-3009) |
 | `request_faucet_funds` | Request testnet tokens |
+| `check_faucet_eligibility` | Check if wallet is eligible for faucet |
+
+Service discovery tools:
+
+| Tool | Description |
+|------|-------------|
+| `discover_services` | Find available paid services from Gateway |
+| `request_service` | Request any discovered service by name |
+| `list_approved_services` | List pre-approved services for autonomous purchasing |
+| `check_service_approval` | Check if a purchase is pre-approved |
 
 MCP tools (discovered via Gateway at `/mcp/tools`):
 
@@ -206,6 +217,9 @@ MCP tools (discovered via Gateway at `/mcp/tools`):
 - [Coinbase Developer Platform](https://portal.cdp.coinbase.com/) API keys
 - Node.js 18+, Python 3.10+
 - AWS CDK CLI
+- Docker (for agent deployment to AgentCore)
+
+See [QUICKSTART.md](QUICKSTART.md) for a streamlined deployment guide.
 
 ## Quick Start
 
@@ -220,20 +234,16 @@ git clone https://github.com/coinbase/x402.git
 git clone https://github.com/coinbase/agentkit.git
 ```
 
-### 2. Configure environment
+### 2. Configure credentials
 
 ```bash
-# Payer agent
+# Payer agent - set your CDP wallet credentials
 cp payer-agent/.env.example payer-agent/.env
-# Set CDP_API_KEY_NAME, CDP_API_KEY_PRIVATE_KEY, CDP_WALLET_SECRET
+# Edit payer-agent/.env → set CDP_API_KEY_ID, CDP_API_KEY_SECRET, CDP_WALLET_SECRET
 
-# Seller infrastructure  
+# Seller infrastructure - set your payment recipient wallet
 cp seller-infrastructure/.env.example seller-infrastructure/.env
-# Set PAYMENT_RECIPIENT_ADDRESS
-
-# Web UI
-cp web-ui/.env.example web-ui/.env
-# Set VITE_API_ENDPOINT, VITE_AWS_REGION, VITE_SELLER_URL
+# Edit seller-infrastructure/.env → set PAYMENT_RECIPIENT_ADDRESS
 ```
 
 ### 3. Deploy seller infrastructure
@@ -245,7 +255,22 @@ npx cdk bootstrap  # First time only
 npx cdk deploy
 ```
 
-### 4. Deploy payer agent
+Note the CloudFront URL from the output (`X402DistributionUrl`), then update your payer agent config:
+
+```bash
+# Edit payer-agent/.env → set SELLER_API_URL to the CloudFront URL above
+```
+
+### 4. Deploy payer infrastructure
+
+```bash
+cd payer-infrastructure
+npm install
+npx cdk bootstrap  # First time only
+npx cdk deploy --all
+```
+
+### 5. Deploy payer agent
 
 ```bash
 cd payer-agent
@@ -255,15 +280,25 @@ pip install -e ".[dev]"
 python scripts/deploy_to_agentcore.py
 ```
 
-### 5. Run Web UI
+### 6. Run Web UI
 
 ```bash
+# Configure the web UI with your seller URL
+cp web-ui/.env.example web-ui/.env.local
+# Edit web-ui/.env.local → set VITE_SELLER_URL to the CloudFront URL from step 3
+
+# In one terminal, start the backend API server:
+cd payer-agent
+source .venv/bin/activate
+python -m agent.api_server
+
+# In another terminal, start the frontend:
 cd web-ui
 npm install
 npm run dev
 ```
 
-### 6. Test
+### 7. Test
 
 ```bash
 cd payer-agent
@@ -287,6 +322,17 @@ The React frontend provides a step-by-step interface for the x402 payment flow:
 - **Agent Response**: Displays agent reasoning at each step
 
 The step-by-step approach keeps each API call under the 29-second timeout limit while providing clear visibility into the payment process.
+
+### Production Deployment (Optional)
+
+To host the Web UI on CloudFront + S3 instead of running locally:
+
+```bash
+cd web-ui-infrastructure
+npm install
+npx cdk bootstrap  # First time only
+npx cdk deploy
+```
 
 ## Tests
 

@@ -42,8 +42,8 @@ aws sts get-caller-identity
 Get API keys from [CDP Portal](https://portal.cdp.coinbase.com/), then edit `payer-agent/.env`:
 
 ```bash
-CDP_API_KEY_NAME=your_key_name
-CDP_API_KEY_PRIVATE_KEY=your_private_key
+CDP_API_KEY_ID=your_key_id
+CDP_API_KEY_SECRET=your_key_secret
 CDP_WALLET_SECRET=your_wallet_secret
 NETWORK_ID=base-sepolia
 ```
@@ -75,6 +75,11 @@ Note the CloudFront URL from output:
 X402SellerStack.X402DistributionUrl = https://dXXXXXXXXXXXXX.cloudfront.net
 ```
 
+Update `payer-agent/.env` with the CloudFront URL:
+```bash
+SELLER_API_URL=https://dXXXXXXXXXXXXX.cloudfront.net
+```
+
 ### Step 4: Deploy Payer (10 min)
 
 ```bash
@@ -99,7 +104,7 @@ cd payer-agent
 source .venv/bin/activate
 
 # Test MCP tool discovery
-python scripts/test_gateway_api.py
+python scripts/test_gateway_target.py
 
 # Invoke agent
 python scripts/invoke_gateway.py "Get me the premium article"
@@ -115,7 +120,7 @@ cd web-ui
 npm run dev
 ```
 
-Configure `web-ui/.env`:
+Configure `web-ui/.env.local`:
 ```bash
 VITE_API_ENDPOINT=https://your-api-gateway-url/prod/
 VITE_AWS_REGION=us-west-2
@@ -130,6 +135,8 @@ VITE_SELLER_URL=https://your-seller-distribution.cloudfront.net
 | `get_weather_data` | 0.0005 |
 | `get_market_analysis` | 0.002 |
 | `get_research_report` | 0.005 |
+| `get_dataset` | 0.01 |
+| `get_tutorial` | 0.003 |
 
 ## Troubleshooting
 
