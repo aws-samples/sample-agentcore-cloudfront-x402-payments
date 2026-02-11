@@ -281,6 +281,14 @@ pip install -e ".[dev]"
 python scripts/deploy_to_agentcore.py
 ```
 
+Note the `AgentRuntimeArn` from the output and set it in `payer-agent/.env`:
+
+```bash
+AGENT_RUNTIME_ARN=arn:aws:bedrock-agentcore:us-west-2:123456789012:runtime/your-runtime-id
+```
+
+> **Important**: Without `AGENT_RUNTIME_ARN`, web-ui-infrastructure has no runtime to proxy to.
+
 ### 6. Run Web UI
 
 ```bash
