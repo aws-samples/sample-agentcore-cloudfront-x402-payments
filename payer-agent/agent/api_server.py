@@ -117,6 +117,26 @@ async def health_check():
     return {"status": "healthy"}
 
 
+@app.get("/wallet")
+async def get_wallet():
+    """Get agent wallet info for the Web UI."""
+    try:
+        from .tools.payment import get_wallet_balance
+        result = get_wallet_balance()
+        if not result.get("success"):
+            raise HTTPException(500, result.get("error", "Failed to get wallet"))
+        return {
+            "address": result["address"],
+            "balance": result.get("usdc_balance", "0"),
+            "network": result.get("network", "base-sepolia"),
+            "currency": "USDC",
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
 @app.get("/ping")
 async def ping():
     """AgentCore health check endpoint."""
