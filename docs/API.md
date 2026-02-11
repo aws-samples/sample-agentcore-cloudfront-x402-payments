@@ -739,7 +739,6 @@ gateway:
 |----------|-------------|---------|
 | `X402_SELLER_CLOUDFRONT_URL` | CloudFront distribution URL | `https://d1234567890abc.cloudfront.net` |
 | `X402_PAYER_AGENT_RUNTIME_ARN` | AgentCore Runtime ARN | `arn:aws:bedrock:us-west-2:123456789012:agent-runtime/...` |
-| `AWS_ACCOUNT_ID` | AWS account ID | `123456789012` |
 
 #### Getting the CloudFront URL
 

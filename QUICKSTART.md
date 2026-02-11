@@ -51,10 +51,8 @@ NETWORK_ID=base-sepolia
 
 **Seller:**
 
-Edit `seller-infrastructure/.env` with your AWS account and wallet address:
+Edit `seller-infrastructure/.env` with your wallet address:
 ```bash
-AWS_ACCOUNT_ID=123456789012
-AWS_REGION=us-east-1
 PAYMENT_RECIPIENT_ADDRESS=<YOUR_SELLER_WALLET_ADDRESS>
 ```
 
@@ -177,10 +175,7 @@ python -c "from agent.tools.payment import request_faucet_funds; print(request_f
 ```
 
 **Lambda@Edge region:**
-Lambda@Edge requires `us-east-1`. Set in `seller-infrastructure/.env`:
-```bash
-AWS_REGION=us-east-1
-```
+Lambda@Edge requires `us-east-1`. This is hardcoded in the CDK stack — no configuration needed.
 
 See [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) for more.
 

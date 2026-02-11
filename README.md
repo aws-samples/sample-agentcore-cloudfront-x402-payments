@@ -243,7 +243,7 @@ cp payer-agent/.env.example payer-agent/.env
 
 # Seller infrastructure - set your AWS account/region and wallet address
 cp seller-infrastructure/.env.example seller-infrastructure/.env
-# Edit seller-infrastructure/.env → set AWS_ACCOUNT_ID and PAYMENT_RECIPIENT_ADDRESS
+# Edit seller-infrastructure/.env → set PAYMENT_RECIPIENT_ADDRESS
 ```
 
 ### 3. Deploy seller infrastructure
