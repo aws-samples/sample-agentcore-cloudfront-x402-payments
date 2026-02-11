@@ -8,6 +8,7 @@ import * as cloudwatch_actions from 'aws-cdk-lib/aws-cloudwatch-actions';
 import * as s3_assets from 'aws-cdk-lib/aws-s3-assets';
 import * as path from 'path';
 import { Construct } from 'constructs';
+import { NagSuppressions } from 'cdk-nag';
 
 /**
  * Rate limiting configuration for the AgentCore Gateway.
@@ -959,5 +960,36 @@ See: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/
       `,
       description: 'Next steps for AgentCore setup',
     });
+
+    // ==========================================
+    // CDK Nag Suppressions
+    // ==========================================
+    NagSuppressions.addResourceSuppressions(cdpSecret, [
+      { id: 'AwsSolutions-SMG4', reason: 'CDP API keys are managed externally by Coinbase — automatic rotation not applicable' },
+    ]);
+
+    NagSuppressions.addResourceSuppressions(agentRuntimeRole, [
+      { id: 'AwsSolutions-IAM5', reason: 'Wildcards required: cross-region inference profiles (bedrock:*), CloudWatch log groups (/aws/bedrock-agentcore/*), and ecr:GetAuthorizationToken requires resource *' },
+    ], true);
+
+    NagSuppressions.addResourceSuppressions(this.gatewayRole, [
+      { id: 'AwsSolutions-IAM5', reason: 'Gateway must invoke any agent/alias in the account — IDs are assigned at runtime by AgentCore' },
+    ], true);
+
+    NagSuppressions.addResourceSuppressions(this.gatewayTargetRole, [
+      { id: 'AwsSolutions-IAM5', reason: 'Gateway target needs broad access: S3 for OpenAPI specs, execute-api for private targets, CloudWatch logs, Lambda functions, KMS for encrypted secrets, and X-Ray tracing — all scoped to account/prefix where possible' },
+    ], true);
+
+    NagSuppressions.addResourceSuppressions(this.rateLimitAlarmTopic, [
+      { id: 'AwsSolutions-SNS3', reason: 'Demo project — SNS SSL enforcement not required for internal alarm notifications' },
+    ]);
+
+    NagSuppressions.addResourceSuppressions(gatewayInvokePolicy, [
+      { id: 'AwsSolutions-IAM5', reason: 'Client invoke policy must allow any agent/alias — IDs assigned at runtime by AgentCore' },
+    ], true);
+
+    NagSuppressions.addResourceSuppressions(gatewayTargetPolicy, [
+      { id: 'AwsSolutions-IAM5', reason: 'Target policy needs S3 wildcard for OpenAPI specs, execute-api for API Gateway targets, and CloudWatch log streams' },
+    ], true);
   }
 }

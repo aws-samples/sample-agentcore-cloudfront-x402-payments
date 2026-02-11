@@ -4,6 +4,7 @@ import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import { Construct } from 'constructs';
+import { NagSuppressions } from 'cdk-nag';
 import * as path from 'path';
 
 export class X402SellerStack extends cdk.Stack {
@@ -358,5 +359,27 @@ export class X402SellerStack extends cdk.Stack {
       }),
       description: 'Summary of caching policies applied to different content types',
     });
+
+    // ==========================================
+    // CDK Nag Suppressions
+    // ==========================================
+    NagSuppressions.addResourceSuppressions(contentBucket, [
+      { id: 'AwsSolutions-S1', reason: 'Demo project — access logs not required for testnet content bucket' },
+      { id: 'AwsSolutions-S10', reason: 'Bucket is only accessed via CloudFront OAI, not directly over the internet' },
+    ], true);
+
+    NagSuppressions.addResourceSuppressions(paymentVerifier, [
+      { id: 'AwsSolutions-IAM4', reason: 'AWSLambdaBasicExecutionRole is required for Lambda@Edge CloudWatch logging' },
+      { id: 'AwsSolutions-IAM5', reason: 'Wildcard scoped to content bucket — Lambda@Edge reads S3 objects to serve paid content' },
+      { id: 'AwsSolutions-L1', reason: 'Lambda@Edge runtime pinned for compatibility — CloudFront replication requires stable runtime' },
+    ], true);
+
+    NagSuppressions.addResourceSuppressions(distribution, [
+      { id: 'AwsSolutions-CFR1', reason: 'Demo project — geo restrictions not needed for testnet demo' },
+      { id: 'AwsSolutions-CFR2', reason: 'Demo project — WAF not required for testnet payment demo' },
+      { id: 'AwsSolutions-CFR3', reason: 'Demo project — CloudFront access logging not required' },
+      { id: 'AwsSolutions-CFR4', reason: 'Using default CloudFront viewer certificate which requires default SSL policy' },
+      { id: 'AwsSolutions-CFR7', reason: 'Using legacy S3Origin with OAI — migration to S3BucketOrigin with OAC is a future improvement' },
+    ]);
   }
 }
