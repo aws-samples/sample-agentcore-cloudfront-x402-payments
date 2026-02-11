@@ -91,11 +91,7 @@ SELLER_API_URL=https://your-cloudfront.cloudfront.net
 ```bash
 AWS_ACCOUNT_ID=123456789012
 AWS_REGION=us-east-1
-```
-
-Set wallet address in `seller-infrastructure/lib/lambda-edge/content-config.ts`:
-```typescript
-const DEFAULT_PAY_TO = '0x...';
+PAYMENT_RECIPIENT_ADDRESS=0x...
 ```
 
 ### web-ui/.env.local

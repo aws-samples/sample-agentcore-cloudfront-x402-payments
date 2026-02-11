@@ -67,10 +67,16 @@ export interface ContentRegistry {
 
 /**
  * Default payment recipient address
- * Lambda@Edge doesn't support environment variables, so this is bundled
- * ⚠️  CHANGE THIS to your own Base Sepolia wallet address before deploying
+ * Can be overridden via PAYMENT_RECIPIENT_ADDRESS in seller-infrastructure/.env
+ * CDK injects the value into deploy-config.json at build time
  */
-const DEFAULT_PAY_TO = '0x24842F3136Fa2a3df835d36b4c3cb4972d405502';
+let deployConfig: { payTo?: string } = {};
+try {
+  deployConfig = require('./deploy-config.json');
+} catch {
+  // No deploy-config.json — use hardcoded default
+}
+const DEFAULT_PAY_TO = deployConfig.payTo || '0x24842F3136Fa2a3df835d36b4c3cb4972d405502';
 
 /**
  * Default network (Base Sepolia testnet)

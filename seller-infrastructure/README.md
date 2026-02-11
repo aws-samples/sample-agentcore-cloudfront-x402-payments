@@ -64,13 +64,13 @@ Note the CloudFront distribution URL from the output.
 
 ### Payment Settings
 
-Set in `lib/lambda-edge/content-config.ts` (Lambda@Edge cannot read environment variables at runtime, so all config is bundled into the code):
+Set in `seller-infrastructure/.env` (CDK injects into the Lambda@Edge bundle at deploy time):
 
-| Setting | Description |
-|---------|-------------|
-| `DEFAULT_PAY_TO` | Wallet address to receive payments |
-| `DEFAULT_NETWORK` | Network ID (default: `eip155:84532` for Base Sepolia) |
-| `DEFAULT_ASSET` | Asset contract address (default: USDC on Base Sepolia) |
+| Setting | `.env` Variable | Description |
+|---------|----------------|-------------|
+| `DEFAULT_PAY_TO` | `PAYMENT_RECIPIENT_ADDRESS` | Wallet address to receive payments |
+| `DEFAULT_NETWORK` | — | Network ID (default: `eip155:84532` for Base Sepolia) |
+| `DEFAULT_ASSET` | — | Asset contract address (default: USDC on Base Sepolia) |
 
 ### Adding Content
 

@@ -51,15 +51,11 @@ NETWORK_ID=base-sepolia
 
 **Seller:**
 
-Edit `seller-infrastructure/.env` with your AWS account for CDK deployment:
+Edit `seller-infrastructure/.env` with your AWS account and wallet address:
 ```bash
 AWS_ACCOUNT_ID=123456789012
 AWS_REGION=us-east-1
-```
-
-Set your wallet address in `seller-infrastructure/lib/lambda-edge/content-config.ts` (Lambda@Edge cannot read environment variables at runtime, so this must be set in code):
-```typescript
-const DEFAULT_PAY_TO = '<YOUR_SELLER_WALLET_ADDRESS>';
+PAYMENT_RECIPIENT_ADDRESS=<YOUR_SELLER_WALLET_ADDRESS>
 ```
 
 To create a seller wallet, you can:

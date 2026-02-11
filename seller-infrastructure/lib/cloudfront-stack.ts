@@ -6,10 +6,26 @@ import * as s3 from 'aws-cdk-lib/aws-s3';
 import { Construct } from 'constructs';
 import { NagSuppressions } from 'cdk-nag';
 import * as path from 'path';
+import * as fs from 'fs';
+import * as dotenv from 'dotenv';
+
+// Load .env from project root
+dotenv.config({ path: path.join(__dirname, '..', '.env') });
 
 export class X402SellerStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
+
+    // Write deploy-config.json into lambda-edge/ so it gets bundled
+    const lambdaEdgeDir = path.join(__dirname, 'lambda-edge');
+    const deployConfig: Record<string, string> = {};
+    if (process.env.PAYMENT_RECIPIENT_ADDRESS) {
+      deployConfig.payTo = process.env.PAYMENT_RECIPIENT_ADDRESS;
+    }
+    fs.writeFileSync(
+      path.join(lambdaEdgeDir, 'deploy-config.json'),
+      JSON.stringify(deployConfig, null, 2)
+    );
 
     // Unique suffix for policy names to avoid conflicts on redeploy
     const suffix = cdk.Names.uniqueId(this).slice(-8);

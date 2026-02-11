@@ -175,7 +175,7 @@ Wallets are created during setup:
 | Role | Source | Description |
 |------|--------|-------------|
 | Payer (Agent) | CDP API | Created automatically by AgentKit |
-| Seller | CDP API or your own | Configure in `seller-infrastructure/lib/lambda-edge/content-config.ts` |
+| Seller | CDP API or your own | Set `PAYMENT_RECIPIENT_ADDRESS` in `seller-infrastructure/.env` |
 
 To create a seller wallet via CDP, see [Creating a Seller Wallet](#creating-a-seller-wallet) below.
 
@@ -241,10 +241,9 @@ git clone https://github.com/coinbase/agentkit.git
 cp payer-agent/.env.example payer-agent/.env
 # Edit payer-agent/.env → set CDP_API_KEY_ID, CDP_API_KEY_SECRET, CDP_WALLET_SECRET
 
-# Seller infrastructure - set your AWS account/region for CDK deployment
+# Seller infrastructure - set your AWS account/region and wallet address
 cp seller-infrastructure/.env.example seller-infrastructure/.env
-# Edit seller-infrastructure/.env → set AWS_ACCOUNT_ID
-# Edit seller-infrastructure/lib/lambda-edge/content-config.ts → set DEFAULT_PAY_TO to your wallet address
+# Edit seller-infrastructure/.env → set AWS_ACCOUNT_ID and PAYMENT_RECIPIENT_ADDRESS
 ```
 
 ### 3. Deploy seller infrastructure
@@ -389,9 +388,9 @@ You need a wallet address on Base Sepolia to receive payments. Options:
 2. **MetaMask**: Add Base Sepolia network and use your address
 3. **CDP API**: Use the AgentKit SDK to create programmatically
 
-Set your wallet address in `seller-infrastructure/lib/lambda-edge/content-config.ts`:
-```typescript
-const DEFAULT_PAY_TO = '<YOUR_WALLET_ADDRESS>';
+Set your wallet address in `seller-infrastructure/.env`:
+```bash
+PAYMENT_RECIPIENT_ADDRESS=<YOUR_WALLET_ADDRESS>
 ```
 
 ## License
