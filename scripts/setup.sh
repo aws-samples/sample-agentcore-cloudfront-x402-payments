@@ -100,6 +100,13 @@ check_prerequisites() {
         print_warning "AWS CDK not found - will be installed locally"
     fi
     
+    # Check Docker
+    if check_command docker; then
+        print_success "Docker $(docker --version | cut -d' ' -f3 | tr -d ',') found"
+    else
+        print_warning "Docker not found - required for agent deployment to AgentCore"
+    fi
+    
     if [ ${#missing_deps[@]} -gt 0 ]; then
         print_error "Missing required dependencies: ${missing_deps[*]}"
         echo ""
@@ -244,7 +251,7 @@ print_next_steps() {
     echo "1. Configure environment variables:"
     echo "   - Edit payer-agent/.env with your CDP credentials"
     echo "   - Edit seller-infrastructure/.env with your AWS account ID"
-    echo "   - Edit web-ui/.env with your Gateway endpoint (optional)"
+    echo "   - Edit web-ui/.env.local with your Gateway endpoint (optional)"
     echo ""
     echo "2. Configure AWS credentials (if not already done):"
     echo "   aws configure"
@@ -260,7 +267,7 @@ print_next_steps() {
     echo "   cd payer-infrastructure && npm run deploy"
     echo ""
     echo "6. Run the payer agent locally:"
-    echo "   cd payer-agent && source .venv/bin/activate && python -m agent.main"
+    echo "   cd payer-agent && source .venv/bin/activate && python -m agent.api_server"
     echo ""
     echo "7. Run the Web UI locally:"
     echo "   cd web-ui && npm run dev"

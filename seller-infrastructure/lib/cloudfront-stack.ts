@@ -4,11 +4,31 @@ import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import { Construct } from 'constructs';
+import { NagSuppressions } from 'cdk-nag';
 import * as path from 'path';
+import * as fs from 'fs';
+import * as dotenv from 'dotenv';
+
+// Load .env from project root
+dotenv.config({ path: path.join(__dirname, '..', '.env') });
 
 export class X402SellerStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
+
+    // Write deploy-config.json into lambda-edge/ so it gets bundled
+    const lambdaEdgeDir = path.join(__dirname, 'lambda-edge');
+    const deployConfig: Record<string, string> = {};
+    if (process.env.PAYMENT_RECIPIENT_ADDRESS) {
+      deployConfig.payTo = process.env.PAYMENT_RECIPIENT_ADDRESS;
+    }
+    fs.writeFileSync(
+      path.join(lambdaEdgeDir, 'deploy-config.json'),
+      JSON.stringify(deployConfig, null, 2)
+    );
+
+    // Unique suffix for policy names to avoid conflicts on redeploy
+    const suffix = cdk.Names.uniqueId(this).slice(-8);
 
     // Create S3 bucket for static content (optional)
     const contentBucket = new s3.Bucket(this, 'ContentBucket', {
@@ -52,7 +72,7 @@ export class X402SellerStack extends cdk.Stack {
       this,
       'PaymentApiCachePolicy',
       {
-        cachePolicyName: 'X402-PaymentApi-NoCache',
+        cachePolicyName: `X402-PaymentApi-NoCache-${suffix}`,
         comment: 'No caching for x402 payment-protected endpoints',
         defaultTtl: cdk.Duration.seconds(0),
         minTtl: cdk.Duration.seconds(0),
@@ -70,7 +90,7 @@ export class X402SellerStack extends cdk.Stack {
       this,
       'StaticAssetsCachePolicy',
       {
-        cachePolicyName: 'X402-StaticAssets-LongCache',
+        cachePolicyName: `X402-StaticAssets-LongCache-${suffix}`,
         comment: 'Long-term caching for static assets that do not require payment',
         defaultTtl: cdk.Duration.days(1),
         minTtl: cdk.Duration.seconds(1),
@@ -89,7 +109,7 @@ export class X402SellerStack extends cdk.Stack {
       this,
       'PublicContentCachePolicy',
       {
-        cachePolicyName: 'X402-PublicContent-ShortCache',
+        cachePolicyName: `X402-PublicContent-ShortCache-${suffix}`,
         comment: 'Short-term caching for public content pages',
         defaultTtl: cdk.Duration.minutes(5),
         minTtl: cdk.Duration.seconds(1),
@@ -112,7 +132,7 @@ export class X402SellerStack extends cdk.Stack {
       this,
       'PaymentApiOriginRequestPolicy',
       {
-        originRequestPolicyName: 'X402-PaymentApi-ForwardHeaders',
+        originRequestPolicyName: `X402-PaymentApi-ForwardHeaders-${suffix}`,
         comment: 'Forward payment headers to origin for x402 verification',
         headerBehavior: cloudfront.OriginRequestHeaderBehavior.allowList(
           'X-Payment-Signature',
@@ -133,7 +153,7 @@ export class X402SellerStack extends cdk.Stack {
       this,
       'ResponseHeadersPolicy',
       {
-        responseHeadersPolicyName: 'X402-ResponseHeaders',
+        responseHeadersPolicyName: `X402-ResponseHeaders-${suffix}`,
         comment: 'CORS and x402 payment response headers',
         corsBehavior: {
           accessControlAllowOrigins: ['*'],
@@ -355,5 +375,27 @@ export class X402SellerStack extends cdk.Stack {
       }),
       description: 'Summary of caching policies applied to different content types',
     });
+
+    // ==========================================
+    // CDK Nag Suppressions
+    // ==========================================
+    NagSuppressions.addResourceSuppressions(contentBucket, [
+      { id: 'AwsSolutions-S1', reason: 'Demo project — access logs not required for testnet content bucket' },
+      { id: 'AwsSolutions-S10', reason: 'Bucket is only accessed via CloudFront OAI, not directly over the internet' },
+    ], true);
+
+    NagSuppressions.addResourceSuppressions(paymentVerifier, [
+      { id: 'AwsSolutions-IAM4', reason: 'AWSLambdaBasicExecutionRole is required for Lambda@Edge CloudWatch logging' },
+      { id: 'AwsSolutions-IAM5', reason: 'Wildcard scoped to content bucket — Lambda@Edge reads S3 objects to serve paid content' },
+      { id: 'AwsSolutions-L1', reason: 'Lambda@Edge runtime pinned for compatibility — CloudFront replication requires stable runtime' },
+    ], true);
+
+    NagSuppressions.addResourceSuppressions(distribution, [
+      { id: 'AwsSolutions-CFR1', reason: 'Demo project — geo restrictions not needed for testnet demo' },
+      { id: 'AwsSolutions-CFR2', reason: 'Demo project — WAF not required for testnet payment demo' },
+      { id: 'AwsSolutions-CFR3', reason: 'Demo project — CloudFront access logging not required' },
+      { id: 'AwsSolutions-CFR4', reason: 'Using default CloudFront viewer certificate which requires default SSL policy' },
+      { id: 'AwsSolutions-CFR7', reason: 'Using legacy S3Origin with OAI — migration to S3BucketOrigin with OAC is a future improvement' },
+    ]);
   }
 }

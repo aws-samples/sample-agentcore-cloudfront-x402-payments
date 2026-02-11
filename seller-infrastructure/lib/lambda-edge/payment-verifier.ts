@@ -10,7 +10,7 @@ import {
   VerifyResponse,
   SettlementResponse,
 } from './types';
-import { contentManager } from './content-config';
+import { contentManager, setContentBucket } from './content-config';
 
 // ============================================================================
 // Logging and Metrics Infrastructure
@@ -174,9 +174,7 @@ function generateRequestId(): string {
 // Using www subdomain to avoid 308 redirect (x402.org redirects to www.x402.org)
 const FACILITATOR_URL = 'https://www.x402.org/facilitator';
 
-// Seller wallet address to receive payments
-// This wallet receives x402 payments on Base Sepolia
-const SELLER_PAY_TO = '0x24842F3136Fa2a3df835d36b4c3cb4972d405502';
+// Seller wallet address is configured in content-config.ts (DEFAULT_PAY_TO)
 
 /**
  * Validates the structure of a payment payload
@@ -536,6 +534,8 @@ function createMCPDiscoveryResponse(requestId: string): CloudFrontRequestResult 
   const paths = contentManager.listContentPaths();
   
   for (const path of paths) {
+    // Only expose /api/ prefixed paths (root paths are duplicates)
+    if (!path.startsWith('/api/')) continue;
     const item = contentManager.getContentItem(path);
     if (!item) continue;
     
@@ -611,6 +611,12 @@ export const handler = async (
 ): Promise<CloudFrontRequestResult> => {
   const request = event.Records[0].cf.request;
   const uri = request.uri;
+
+  // Extract S3 bucket name from CloudFront origin config (avoids hardcoding)
+  const originDomain = (request.origin as any)?.s3?.domainName || '';
+  if (originDomain) {
+    setContentBucket(originDomain.split('.s3')[0]);
+  }
   
   // Initialize logger with request ID for tracing
   const requestId = generateRequestId();

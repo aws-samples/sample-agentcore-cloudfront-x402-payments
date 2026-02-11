@@ -135,3 +135,6 @@ temp/
 *_ed25519
 credentials.json
 secrets.json
+
+# Generated at CDK synth time
+deploy-config.json

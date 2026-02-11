@@ -10,6 +10,7 @@ Get the x402 payment demo running in under 30 minutes.
 | Python | 3.10+ | `python3 --version` |
 | AWS CLI | 2.x | `aws --version` |
 | AWS CDK | 2.x | `cdk --version` |
+| Docker | 20+ | `docker --version` |
 
 Also required:
 - AWS account with Bedrock AgentCore access
@@ -42,15 +43,15 @@ aws sts get-caller-identity
 Get API keys from [CDP Portal](https://portal.cdp.coinbase.com/), then edit `payer-agent/.env`:
 
 ```bash
-CDP_API_KEY_NAME=your_key_name
-CDP_API_KEY_PRIVATE_KEY=your_private_key
+CDP_API_KEY_ID=your_key_id
+CDP_API_KEY_SECRET=your_key_secret
 CDP_WALLET_SECRET=your_wallet_secret
 NETWORK_ID=base-sepolia
 ```
 
 **Seller:**
 
-Edit `seller-infrastructure/.env`:
+Edit `seller-infrastructure/.env` with your AWS account and wallet address:
 ```bash
 AWS_ACCOUNT_ID=123456789012
 AWS_REGION=us-east-1
@@ -72,7 +73,12 @@ npx cdk deploy
 
 Note the CloudFront URL from output:
 ```
-X402SellerStack.X402DistributionUrl = https://dXXXXXXXXXXXXX.cloudfront.net
+X402SellerStack.DistributionUrl = https://dXXXXXXXXXXXXX.cloudfront.net
+```
+
+Update `payer-agent/.env` with the CloudFront URL:
+```bash
+SELLER_API_URL=https://dXXXXXXXXXXXXX.cloudfront.net
 ```
 
 ### Step 4: Deploy Payer (10 min)
@@ -92,6 +98,14 @@ source .venv/bin/activate
 python scripts/deploy_to_agentcore.py
 ```
 
+Note the `AgentRuntimeArn` from the output and set it in `payer-agent/.env`:
+
+```bash
+AGENT_RUNTIME_ARN=arn:aws:bedrock-agentcore:us-west-2:123456789012:runtime/your-runtime-id
+```
+
+> **Important**: Without `AGENT_RUNTIME_ARN`, web-ui-infrastructure has no runtime to proxy to.
+
 ### Step 6: Test
 
 ```bash
@@ -99,7 +113,7 @@ cd payer-agent
 source .venv/bin/activate
 
 # Test MCP tool discovery
-python scripts/test_gateway_api.py
+python scripts/test_gateway_target.py
 
 # Invoke agent
 python scripts/invoke_gateway.py "Get me the premium article"
@@ -110,16 +124,23 @@ pytest tests/ -v
 
 ### Step 7: Web UI (Optional)
 
+Configure `web-ui/.env.local`:
 ```bash
-cd web-ui
-npm run dev
+VITE_API_ENDPOINT=http://localhost:8080
+VITE_AWS_REGION=us-east-1
+VITE_SELLER_URL=https://your-seller-distribution.cloudfront.net
 ```
 
-Configure `web-ui/.env`:
+Start the backend API server and frontend in separate terminals:
 ```bash
-VITE_API_ENDPOINT=https://your-api-gateway-url/prod/
-VITE_AWS_REGION=us-west-2
-VITE_SELLER_URL=https://your-seller-distribution.cloudfront.net
+# Terminal 1: Backend
+cd payer-agent
+source .venv/bin/activate
+python -m agent.api_server
+
+# Terminal 2: Frontend
+cd web-ui
+npm run dev
 ```
 
 ## MCP Tools
@@ -130,6 +151,8 @@ VITE_SELLER_URL=https://your-seller-distribution.cloudfront.net
 | `get_weather_data` | 0.0005 |
 | `get_market_analysis` | 0.002 |
 | `get_research_report` | 0.005 |
+| `get_dataset` | 0.01 |
+| `get_tutorial` | 0.003 |
 
 ## Troubleshooting
 
