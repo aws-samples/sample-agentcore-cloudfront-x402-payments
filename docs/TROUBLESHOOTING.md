@@ -119,13 +119,9 @@ cdk import
 **Cause**: Lambda@Edge must be deployed to `us-east-1`.
 
 **Solution**:
-Ensure your `seller-infrastructure/.env` has:
-```bash
-AWS_REGION=us-east-1
-CDK_DEFAULT_REGION=us-east-1
-```
+Lambda@Edge requires `us-east-1`, which is hardcoded in the CDK stack. No `.env` configuration needed.
 
-Then redeploy:
+Redeploy:
 ```bash
 cd seller-infrastructure
 cdk deploy
