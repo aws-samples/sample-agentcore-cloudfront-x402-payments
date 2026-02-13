@@ -67,10 +67,16 @@ export interface ContentRegistry {
 
 /**
  * Default payment recipient address
- * Lambda@Edge doesn't support environment variables, so this is bundled
- * This is the seller's wallet that receives x402 payments
+ * Can be overridden via PAYMENT_RECIPIENT_ADDRESS in seller-infrastructure/.env
+ * CDK injects the value into deploy-config.json at build time
  */
-const DEFAULT_PAY_TO = '0x24842F3136Fa2a3df835d36b4c3cb4972d405502';
+let deployConfig: { payTo?: string } = {};
+try {
+  deployConfig = require('./deploy-config.json');
+} catch {
+  // No deploy-config.json — use hardcoded default
+}
+const DEFAULT_PAY_TO = deployConfig.payTo || '0x24842F3136Fa2a3df835d36b4c3cb4972d405502';
 
 /**
  * Default network (Base Sepolia testnet)
@@ -85,10 +91,10 @@ const DEFAULT_ASSET = '0x036CbD53842c5426634e7929541eC2318f3dCF7e';
 
 /**
  * Default S3 bucket for content storage
- * This is the CDK-generated bucket name from the X402SellerStack deployment
- * Lambda@Edge doesn't support environment variables, so this must be hardcoded
+ * Set at runtime from the CloudFront origin event via setContentBucket()
+ * Lambda@Edge doesn't support environment variables, so this is resolved dynamically
  */
-const DEFAULT_CONTENT_BUCKET = 'x402sellerstack-contentbucket52d4b12c-h81ogh04nmda';
+let DEFAULT_CONTENT_BUCKET = '';
 
 /**
  * Creates default payment requirements with optional overrides
@@ -548,3 +554,16 @@ export class ContentManager {
  * Default content manager instance
  */
 export const contentManager = new ContentManager();
+
+/**
+ * Sets the S3 bucket name for all S3-backed content items.
+ * Called at runtime from the Lambda handler using the CloudFront origin domain.
+ */
+export function setContentBucket(bucketName: string): void {
+  DEFAULT_CONTENT_BUCKET = bucketName;
+  for (const item of Object.values(contentManager['registry'].items)) {
+    if (item.source.type === 's3') {
+      item.source.bucket = bucketName;
+    }
+  }
+}

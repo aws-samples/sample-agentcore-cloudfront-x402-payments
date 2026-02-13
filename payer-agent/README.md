@@ -154,7 +154,7 @@ runtime:
   memory_size_mb: 1024
   timeout_seconds: 300
   environment:
-    BEDROCK_MODEL_ID: "anthropic.claude-3-sonnet-20240229-v1:0"
+    BEDROCK_MODEL_ID: "anthropic.claude-sonnet-4-20250514-v1:0"
     NETWORK_ID: "base-sepolia"
 ```
 

@@ -18,7 +18,7 @@ from pathlib import Path
 
 # Configuration
 AGENT_NAME = "x402PayerAgent"
-REGION = os.getenv("AWS_REGION", "us-west-2")
+REGION = os.getenv("AWS_REGION") or os.getenv("CDK_DEFAULT_REGION") or os.getenv("AWS_DEFAULT_REGION", "us-west-2")
 RUNTIME_ROLE_ARN = os.getenv("RUNTIME_ROLE_ARN")
 
 # Get from CDK outputs if not set
