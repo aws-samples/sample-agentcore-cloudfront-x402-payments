@@ -337,7 +337,10 @@ Set your wallet address in `seller-infrastructure/.env`:
 ```bash
 PAYMENT_RECIPIENT_ADDRESS=<YOUR_WALLET_ADDRESS>
 ```
+## Security
+
+See [CONTRIBUTING](CONTRIBUTING.md) for more information.
 
 ## License
 
-MIT-0
+This library is licensed under the MIT-0 License. See the LICENSE file.

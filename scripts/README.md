@@ -88,9 +88,9 @@ SELLER_API_URL=https://your-cloudfront.cloudfront.net
 ### seller-infrastructure/.env
 
 ```bash
-AWS_ACCOUNT_ID=123456789012
-AWS_REGION=us-east-1
-PAYMENT_RECIPIENT_ADDRESS=0x...
+AWS_ACCOUNT_ID=<YOUR_AWS_ACCOUNT_ID>
+AWS_REGION=<region, e.g., us-east-1>
+PAYMENT_RECIPIENT_ADDRESS=<YOUR_SELLER_WALLET_ADDRESS>
 ```
 
 ### web-ui/.env
