@@ -249,72 +249,66 @@ cp seller-infrastructure/.env.example seller-infrastructure/.env
 ### 3. Deploy seller infrastructure
 
 ```bash
-cd seller-infrastructure
+cd x402-agentcore-demo/seller-infrastructure
 npm install
 npx cdk bootstrap  # First time only
 npx cdk deploy
 ```
 
-Note the CloudFront URL from the output (`X402DistributionUrl`), then update your payer agent config:
+### 4. Sync environment variables
+
+This automatically pulls the CloudFront URL from the seller stack and updates `payer-agent/.env`:
 
 ```bash
-# Edit payer-agent/.env → set SELLER_API_URL to the CloudFront URL above
+cd x402-agentcore-demo
+./scripts/sync-env.sh
 ```
 
-### 4. Deploy payer infrastructure
+### 5. Deploy payer infrastructure
 
 ```bash
-cd payer-infrastructure
+cd x402-agentcore-demo/payer-infrastructure
 npm install
-export X402_SELLER_CLOUDFRONT_URL=https://dXXXXXXXXXXXXX.cloudfront.net  # from step 3
 npx cdk bootstrap  # First time only
 npx cdk deploy --all
 ```
 
-### 5. Deploy payer agent
+### 6. Deploy payer agent
+
+The deploy script automatically writes `AGENT_RUNTIME_ARN` back to `payer-agent/.env`.
 
 ```bash
-cd payer-agent
+cd x402-agentcore-demo/payer-agent
 python -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
 python scripts/deploy_to_agentcore.py
 ```
 
-Note the `AgentRuntimeArn` from the output and set it in `payer-agent/.env`:
-
-```bash
-AGENT_RUNTIME_ARN=arn:aws:bedrock-agentcore:us-west-2:123456789012:runtime/your-runtime-id
-```
-
 > **Important**: Without `AGENT_RUNTIME_ARN`, web-ui-infrastructure has no runtime to proxy to.
 
-### 6. Run Web UI
+### 7. Run Web UI
 
 ```bash
-# Configure the web UI with your seller URL
-cp web-ui/.env.example web-ui/.env.local
-# Edit web-ui/.env.local → set VITE_SELLER_URL to the CloudFront URL from step 3
-
 # In one terminal, start the backend API server:
-cd payer-agent
+cd x402-agentcore-demo/payer-agent
 source .venv/bin/activate
 python -m agent.api_server
 
 # In another terminal, start the frontend:
-cd web-ui
+cd x402-agentcore-demo/web-ui
 npm install
 npm run dev
 ```
 
-### 7. Test
+### 8. Test
 
 ```bash
-cd payer-agent
+cd x402-agentcore-demo/payer-agent
 pytest
 
 # Integration tests
-SELLER_API_URL=https://your-cloudfront-url pytest -m integration
+SELLER_API_URL=$(grep SELLER_API_URL .env | cut -d= -f2) pytest -m integration
 
 # Invoke agent
 python scripts/invoke_gateway.py "Get me the premium article"
