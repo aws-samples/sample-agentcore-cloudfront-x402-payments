@@ -7,6 +7,7 @@ import * as sns from 'aws-cdk-lib/aws-sns';
 import * as cloudwatch_actions from 'aws-cdk-lib/aws-cloudwatch-actions';
 import * as s3_assets from 'aws-cdk-lib/aws-s3-assets';
 import * as path from 'path';
+import * as fs from 'fs';
 import { Construct } from 'constructs';
 import { NagSuppressions } from 'cdk-nag';
 
@@ -78,10 +79,17 @@ export class AgentCoreStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: AgentCoreStackProps) {
     super(scope, id, props);
 
-    // Get seller CloudFront URL from props or environment variable
-    const sellerCloudFrontUrl = props?.sellerCloudFrontUrl 
-      || process.env.X402_SELLER_CLOUDFRONT_URL 
-      || 'https://REPLACE_WITH_CLOUDFRONT_URL.cloudfront.net';
+    // Get seller CloudFront URL from props, environment, or payer-agent/.env
+    let sellerCloudFrontUrl = props?.sellerCloudFrontUrl
+      || process.env.X402_SELLER_CLOUDFRONT_URL;
+    if (!sellerCloudFrontUrl) {
+      const envPath = path.join(__dirname, '../../payer-agent/.env');
+      if (fs.existsSync(envPath)) {
+        const match = fs.readFileSync(envPath, 'utf-8').match(/^SELLER_API_URL=(.+)$/m);
+        if (match) sellerCloudFrontUrl = match[1].trim();
+      }
+    }
+    sellerCloudFrontUrl = sellerCloudFrontUrl || 'https://REPLACE_WITH_CLOUDFRONT_URL.cloudfront.net';
 
     // Initialize rate limit configuration with defaults
     this.rateLimitConfig = {

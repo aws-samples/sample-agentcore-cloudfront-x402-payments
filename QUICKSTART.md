@@ -64,50 +64,48 @@ To create a seller wallet, you can:
 ### Step 3: Deploy Seller (10 min)
 
 ```bash
-cd seller-infrastructure
+cd x402-agentcore-demo/seller-infrastructure
+npm install
 npx cdk bootstrap  # first time only
 npx cdk deploy
 ```
 
-Note the CloudFront URL from output:
-```
-X402SellerStack.DistributionUrl = https://dXXXXXXXXXXXXX.cloudfront.net
-```
+### Step 4: Sync Environment Variables
 
-Update `payer-agent/.env` with the CloudFront URL:
-```bash
-SELLER_API_URL=https://dXXXXXXXXXXXXX.cloudfront.net
-```
-
-### Step 4: Deploy Payer (10 min)
+This automatically pulls the CloudFront URL from the seller stack and updates `payer-agent/.env` and `web-ui/.env.local`:
 
 ```bash
-cd payer-infrastructure
-export X402_SELLER_CLOUDFRONT_URL=https://dXXXXXXXXXXXXX.cloudfront.net
+cd x402-agentcore-demo
+./scripts/sync-env.sh
+```
+
+### Step 5: Deploy Payer (10 min)
+
+```bash
+cd x402-agentcore-demo/payer-infrastructure
+npm install
 npx cdk bootstrap  # first time only
-npx cdk deploy
+npx cdk deploy --all
 ```
 
-### Step 5: Deploy Agent
+### Step 6: Deploy Agent
+
+The deploy script automatically writes `AGENT_RUNTIME_ARN` back to `payer-agent/.env`.
 
 ```bash
-cd payer-agent
+cd x402-agentcore-demo/payer-agent
+python -m venv .venv
 source .venv/bin/activate
+pip install -e ".[dev]"
 python scripts/deploy_to_agentcore.py
-```
-
-Note the `AgentRuntimeArn` from the output and set it in `payer-agent/.env`:
-
-```bash
-AGENT_RUNTIME_ARN=arn:aws:bedrock-agentcore:us-west-2:123456789012:runtime/your-runtime-id
 ```
 
 > **Important**: Without `AGENT_RUNTIME_ARN`, web-ui-infrastructure has no runtime to proxy to.
 
-### Step 6: Test
+### Step 7: Test
 
 ```bash
-cd payer-agent
+cd x402-agentcore-demo/payer-agent
 source .venv/bin/activate
 
 # Test MCP tool discovery
@@ -120,24 +118,18 @@ python scripts/invoke_gateway.py "Get me the premium article"
 pytest tests/ -v
 ```
 
-### Step 7: Web UI (Optional)
-
-Configure `web-ui/.env.local`:
-```bash
-VITE_API_ENDPOINT=http://localhost:8080
-VITE_AWS_REGION=us-east-1
-VITE_SELLER_URL=https://your-seller-distribution.cloudfront.net
-```
+### Step 8: Web UI (Optional)
 
 Start the backend API server and frontend in separate terminals:
 ```bash
 # Terminal 1: Backend
-cd payer-agent
+cd x402-agentcore-demo/payer-agent
 source .venv/bin/activate
 python -m agent.api_server
 
 # Terminal 2: Frontend
-cd web-ui
+cd x402-agentcore-demo/web-ui
+npm install
 npm run dev
 ```
 
