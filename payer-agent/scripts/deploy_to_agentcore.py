@@ -168,6 +168,7 @@ def get_env_vars() -> dict:
     
     # Only include specific variables needed by the agent
     allowed_vars = [
+        "AWS_REGION",
         "CDP_API_KEY_ID",
         "CDP_API_KEY_SECRET",
         "CDP_WALLET_SECRET",
