@@ -13,54 +13,61 @@ This project demonstrates a payment-gated content delivery system using the [x40
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                              PAYER SIDE                                     │
-│  ┌───────────────────────────────────────────────────────────────────────┐  │
-│  │                    Bedrock AgentCore                                  │  │
-│  │  ┌─────────────────────────────────────────────────────────────────┐  │  │
-│  │  │                    Gateway (MCP Tool Server)                    │  │  │
-│  │  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────┐  │  │  │
-│  │  │  │  IAM Auth   │  │ MCP Protocol│  │   OpenAPI Targets       │  │  │  │
-│  │  │  │  (SigV4)    │  │  Discovery  │  │   (Content Tools)       │  │  │  │
-│  │  │  └─────────────┘  └──────┬──────┘  └────────────┬────────────┘  │  │  │
-│  │  └──────────────────────────┼──────────────────────┼───────────────┘  │  │
-│  │                             │                      │                  │  │
-│  │  ┌─────────────┐  ┌─────────▼─────────┐   ┌────────▼────────┐         │  │
-│  │  │   Runtime   │  │   Strands Agent   │   │    AgentKit     │         │  │
-│  │  │  (Session)  │  │   (Python)        │   │    Wallet       │         │  │
-│  │  │             │  │                   │   │    (CDP)        │         │  │
-│  │  │             │  │  ┌─────────────┐  │   │                 │         │  │
-│  │  │             │  │  │ MCP Client  │◄─┼───┤  Payment Sign   │         │  │
-│  │  │             │  │  │ (Discovery) │  │   │  (EIP-3009)     │         │  │
-│  │  │             │  │  └─────────────┘  │   │                 │         │  │
-│  │  └─────────────┘  └───────────────────┘   └─────────────────┘         │  │
-│  └───────────────────────────────────────────────────────────────────────┘  │
-│                                    │                                        │
-│                                    │ HTTPS (x402 v2)                        │
-│                                    ▼                                        │
-└────────────────────────────────────┼────────────────────────────────────────┘
-                                     │
-┌────────────────────────────────────┼────────────────────────────────────────┐
-│                              SELLER SIDE                                    │
-│                                    │                                        │
-│                          ┌─────────▼─────────┐                              │
-│                          │    CloudFront     │                              │
-│                          │   Distribution    │                              │
-│                          └─────────┬─────────┘                              │
-│                                    │                                        │
-│                          ┌─────────▼─────────┐     ┌──────────────────┐     │
-│                          │   Lambda@Edge     │────►│   x402           │     │
-│                          │ Payment Verifier  │     │   Facilitator    │     │
-│                          └─────────┬─────────┘     └──────────────────┘     │
-│                                    │                                        │
-│                    ┌───────────────┼───────────────┐                        │
-│                    │               │               │                        │
-│              ┌─────▼─────┐  ┌──────▼──────┐   ┌────▼────┐                   │
-│              │  Return   │  │   Verify    │   │  Serve  │                   │
-│              │   402     │  │   Payment   │   │ Content │                   │
-│              └───────────┘  └─────────────┘   └─────────┘                   │
-└─────────────────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────── AWS Account ───────────────────────────────────────┐
+│                                                                                        │
+│  ┌─── WEB UI INFRASTRUCTURE ───────────────────────────────────────────────────┐       │
+│  │                                                                             │       │
+│  │   Browser ──► CloudFront (S3) ──► React App                                 │       │
+│  │                                                                             │       │
+│  │   React App ──► API Gateway ──► Lambda (proxy)  ──┐                         │       │
+│  │                                                   │                         │       │
+│  └───────────────────────────────────────────────────┼─────────────────────────┘       │
+│                                                      │                                 │
+│  ┌─── PAYER INFRASTRUCTURE ──────────────────────────┼─────────────────────────┐       │
+│  │                                                   ▼                         │       │
+│  │   ┌─────────────────── Bedrock AgentCore ───────────────────────────────┐   │       │
+│  │   │                                                                     │   │       │
+│  │   │  Gateway (MCP Tool Server)                                          │   │       │
+│  │   │  ┌──────────────┐  ┌───────────────┐  ┌──────────────────────────┐  │   │       │
+│  │   │  │  IAM Auth    │  │ MCP Protocol  │  │  OpenAPI Targets         │  │   │       │
+│  │   │  │  (SigV4)     │  │ Discovery     │  │  (Content Tools)         │  │   │       │
+│  │   │  └──────────────┘  └───────┬───────┘  └────────────┬─────────────┘  │   │       │
+│  │   │                            │                       │                │   │       │
+│  │   │  ┌────────────┐  ┌─────────▼────────┐  ┌──────────▼──────────┐      │   │       │
+│  │   │  │  Runtime   │  │  Strands Agent   │  │  AgentKit Wallet    │      │   │       │
+│  │   │  │  (Session) │  │  (Python)        │  │  (CDP / EIP-3009)   │      │   │       │
+│  │   │  └────────────┘  └──────────────────┘  └─────────────────────┘      │   │       │
+│  │   │                                                                     │   │       │
+│  │   └─────────────────────────────┬───────────────────────────────────────┘   │       │
+│  │                                 │                                           │       │
+│  └─────────────────────────────────┼───────────────────────────────────────────┘       │
+│                                    │ HTTPS + x402 headers                              │
+│                                    ▼                                                   │
+│  ┌─── SELLER INFRASTRUCTURE ────────────────────────────────────────────────────────┐  │
+│  │                                                                                  │  │
+│  │   CloudFront ──► Lambda@Edge (Origin Request) ───┬──► S3 Content Bucket          │  │
+│  │                  (Payment Verifier)              │                               │  │
+│  │                                                  │  No payment: return 402       │  │
+│  │                                                  │  Valid payment: serve content │  │
+│  └──────────────────────────────────────────────────┼───────────────────────────────┘  │
+│                                                     │                                  │
+└─────────────────────────────────────────────────────┼──────────────────────────────────┘
+                                                      │ HTTPS
+                                            ┌─────────▼─────────┐
+                                            │  x402 Facilitator │
+                                            │  (external SaaS)  │
+                                            └────────┬──────────┘
+                                                     │ On-chain settlement
+                                            ┌────────▼──────────┐
+                                            │  Base Sepolia     │
+                                            │  (USDC testnet)   │
+                                            └───────────────────┘
 ```
+
+The three CDK stacks deploy into a single AWS account:
+- **web-ui-infrastructure**: CloudFront + S3 for the React app, API Gateway + Lambda proxy to AgentCore
+- **payer-infrastructure**: IAM roles, secrets, and observability for Bedrock AgentCore (Runtime, Gateway, Agent)
+- **seller-infrastructure**: CloudFront + Lambda@Edge for x402 payment-gated content, S3 content bucket
 
 AgentCore Gateway acts as an MCP tool server:
 - Content endpoints exposed as discoverable MCP tools via OpenAPI spec
@@ -292,9 +299,12 @@ AGENT_RUNTIME_ARN=arn:aws:bedrock-agentcore:us-west-2:123456789012:runtime/your-
 ### 6. Run Web UI
 
 ```bash
-# Configure the web UI with your seller URL
+# Configure the web UI
 cp web-ui/.env.example web-ui/.env.local
-# Edit web-ui/.env.local → set VITE_SELLER_URL to the CloudFront URL from step 3
+# Edit web-ui/.env.local:
+#   VITE_API_ENDPOINT=http://localhost:8080        (local backend API server)
+#   VITE_AWS_REGION=us-west-2                      (your AWS region)
+#   VITE_SELLER_URL=https://dXXXXXXXXXXXXX.cloudfront.net  (from step 3)
 
 # In one terminal, start the backend API server:
 cd payer-agent
