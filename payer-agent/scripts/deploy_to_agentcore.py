@@ -15,6 +15,9 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from dotenv import load_dotenv
+
+load_dotenv(Path(__file__).parent.parent / ".env")
 
 # Configuration
 AGENT_NAME = "x402PayerAgent"
@@ -165,6 +168,7 @@ def get_env_vars() -> dict:
     
     # Only include specific variables needed by the agent
     allowed_vars = [
+        "AWS_REGION",
         "CDP_API_KEY_ID",
         "CDP_API_KEY_SECRET",
         "CDP_WALLET_SECRET",
@@ -250,6 +254,21 @@ def test_invocation(runtime_arn: str) -> bool:
         return False
 
 
+def update_env_file(key: str, value: str):
+    """Update a key=value in payer-agent/.env, or append if missing."""
+    env_file = Path(__file__).parent.parent / ".env"
+    if not env_file.exists():
+        return
+    content = env_file.read_text()
+    import re
+    if re.search(rf'^{key}=', content, re.MULTILINE):
+        content = re.sub(rf'^{key}=.*$', f'{key}={value}', content, flags=re.MULTILINE)
+    else:
+        content = content.rstrip('\n') + f'\n{key}={value}\n'
+    env_file.write_text(content)
+    print(f"  Updated .env → {key}={value}")
+
+
 def main():
     print(f"Deploying {AGENT_NAME} to AgentCore Runtime (Container Mode)")
     print(f"  Region: {REGION}")
@@ -288,6 +307,7 @@ def main():
         print()
         print("✅ Runtime deployed successfully!")
         print(f"   ARN: {runtime_arn}")
+        update_env_file("AGENT_RUNTIME_ARN", runtime_arn)
         print()
         
         # Test invocation
