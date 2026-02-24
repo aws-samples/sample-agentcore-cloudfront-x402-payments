@@ -1,6 +1,6 @@
-# x402 AWS Enterprise Demo
+# x402 Payments using Amazon Bedrock AgentCore
 
-HTTP 402 payment-gated content delivery using AWS Bedrock AgentCore and Coinbase AgentKit.
+HTTP 402 payment-gated content delivery using AWS Bedrock AgentCore and Coinbase AgentKit, paying a seller operating on CloudFront, Lambda@Edge, and S3.
 
 ## Overview
 
