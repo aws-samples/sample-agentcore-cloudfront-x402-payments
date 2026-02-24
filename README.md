@@ -121,7 +121,7 @@ The Web UI guides users through a 3-step payment process:
 | Agent Runtime | [Amazon Bedrock AgentCore](https://docs.aws.amazon.com/bedrock-agentcore/) |
 | Tool Discovery | MCP Protocol via Gateway |
 | LLM | Amazon Bedrock (Claude Sonnet) |
-| Wallet | [Coinbase AgentKit](https://docs.cdp.coinbase.com/agentkit/) |
+| Wallet | [Coinbase AgentKit](https://docs.cdp.coinbase.com/agent-kit/welcome) |
 | Content Delivery | CloudFront + Lambda@Edge |
 | Payment Protocol | [x402](https://github.com/coinbase/x402) |
 | Network | Base Sepolia (testnet) |

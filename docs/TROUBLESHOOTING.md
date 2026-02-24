@@ -870,7 +870,7 @@ aws bedrock list-foundation-models --query "modelSummaries[?contains(modelId, 'c
 If you're still stuck:
 
 1. Check the [x402 GitHub Issues](https://github.com/coinbase/x402/issues)
-2. Review [AgentKit Documentation](https://docs.cdp.coinbase.com/agentkit/)
+2. Review [AgentKit Documentation](https://docs.cdp.coinbase.com/agent-kit/welcome)
 3. Consult [Strands Agents Docs](https://strandsagents.com/)
 4. Check [Bedrock AgentCore Docs](https://docs.aws.amazon.com/bedrock-agentcore/)
 
