@@ -12,62 +12,73 @@ This project demonstrates a payment-gated content delivery system using the [x40
 
 ## Architecture
 
-```
-┌──────────────────────────────────── AWS Account ───────────────────────────────────────┐
-│                                                                                        │
-│  ┌─── WEB UI INFRASTRUCTURE ───────────────────────────────────────────────────┐       │
-│  │                                                                             │       │
-│  │   Browser ──► CloudFront (S3) ──► React App                                 │       │
-│  │                                                                             │       │
-│  │   React App ──► API Gateway ──► Lambda (proxy)  ──┐                         │       │
-│  │                                                   │                         │       │
-│  └───────────────────────────────────────────────────┼─────────────────────────┘       │
-│                                                      │                                 │
-│  ┌─── PAYER INFRASTRUCTURE ──────────────────────────┼─────────────────────────┐       │
-│  │                                                   ▼                         │       │
-│  │   ┌─────────────────── Bedrock AgentCore ───────────────────────────────┐   │       │
-│  │   │                                                                     │   │       │
-│  │   │  Gateway (MCP Tool Server)                                          │   │       │
-│  │   │  ┌──────────────┐  ┌───────────────┐  ┌──────────────────────────┐  │   │       │
-│  │   │  │  IAM Auth    │  │ MCP Protocol  │  │  OpenAPI Targets         │  │   │       │
-│  │   │  │  (SigV4)     │  │ Discovery     │  │  (Content Tools)         │  │   │       │
-│  │   │  └──────────────┘  └───────┬───────┘  └────────────┬─────────────┘  │   │       │
-│  │   │                            │                       │                │   │       │
-│  │   │  ┌────────────┐  ┌─────────▼────────┐  ┌──────────▼──────────┐      │   │       │
-│  │   │  │  Runtime   │  │  Strands Agent   │  │  AgentKit Wallet    │      │   │       │
-│  │   │  │  (Session) │  │  (Python)        │  │  (CDP / EIP-3009)   │      │   │       │
-│  │   │  └────────────┘  └──────────────────┘  └─────────────────────┘      │   │       │
-│  │   │                                                                     │   │       │
-│  │   └─────────────────────────────┬───────────────────────────────────────┘   │       │
-│  │                                 │                                           │       │
-│  └─────────────────────────────────┼───────────────────────────────────────────┘       │
-│                                    │ HTTPS + x402 headers                              │
-│                                    ▼                                                   │
-│  ┌─── SELLER INFRASTRUCTURE ────────────────────────────────────────────────────────┐  │
-│  │                                                                                  │  │
-│  │   CloudFront ──► Lambda@Edge (Origin Request) ───┬──► S3 Content Bucket          │  │
-│  │                  (Payment Verifier)              │                               │  │
-│  │                                                  │  No payment: return 402       │  │
-│  │                                                  │  Valid payment: serve content │  │
-│  └──────────────────────────────────────────────────┼───────────────────────────────┘  │
-│                                                     │                                  │
-└─────────────────────────────────────────────────────┼──────────────────────────────────┘
-                                                      │ HTTPS
-                                            ┌─────────▼─────────┐
-                                            │  x402 Facilitator │
-                                            │  (external SaaS)  │
-                                            └────────┬──────────┘
-                                                     │ On-chain settlement
-                                            ┌────────▼──────────┐
-                                            │  Base Sepolia     │
-                                            │  (USDC testnet)   │
-                                            └───────────────────┘
+```mermaid
+flowchart LR
+    Browser["🌐 Browser"]
+
+    subgraph AWS["AWS Account"]
+        direction LR
+
+        subgraph WebUI["web-ui-infrastructure"]
+            direction TB
+            CF_UI["Amazon CloudFront"]
+            S3_UI["Amazon S3\n(React App)"]
+            APIGW["Amazon API Gateway\n(REST, 29s timeout)"]
+            Lambda_Proxy["AWS Lambda\n(Python 3.12 Proxy)"]
+            CF_UI --> S3_UI
+            APIGW --> Lambda_Proxy
+        end
+
+        subgraph Payer["payer-infrastructure"]
+            direction TB
+            subgraph AgentCore["Amazon Bedrock AgentCore"]
+                direction TB
+                Gateway["Gateway\n(MCP Tool Server, IAM SigV4)"]
+                Runtime["Runtime\n(Session Management)"]
+                Agent["Strands Agent\n(Python)"]
+                Wallet["AgentKit Wallet\n(CDP, EIP-3009)"]
+                Gateway --> Runtime
+                Runtime --> Agent
+                Agent --> Wallet
+            end
+            Bedrock["Amazon Bedrock\n(Claude Sonnet)"]
+            Secrets["AWS Secrets Manager\n(CDP Credentials)"]
+            CW["Amazon CloudWatch\n(Dashboards, Alarms)"]
+            S3_Spec["Amazon S3\n(OpenAPI Spec)"]
+            Agent --> Bedrock
+            Agent --> Secrets
+            Gateway --> S3_Spec
+        end
+
+        subgraph Seller["seller-infrastructure"]
+            direction TB
+            CF_Seller["Amazon CloudFront\n(x402 Payment-Gated)"]
+            LambdaEdge["Lambda@Edge\n(Payment Verifier,\nNode.js 20.x, us-east-1)"]
+            S3_Content["Amazon S3\n(Content Bucket)"]
+            CF_Seller --> LambdaEdge
+            LambdaEdge -->|"Valid payment"| S3_Content
+            LambdaEdge -->|"No payment"| FourOhTwo["402 Response\n+ x402 Headers"]
+        end
+    end
+
+    Facilitator["x402 Facilitator\n(x402.org)"]
+    Blockchain["Base Sepolia\n(USDC Testnet)"]
+    CDP["Coinbase Developer\nPlatform API"]
+
+    Browser -->|"HTTPS"| CF_UI
+    Browser -->|"API Calls"| APIGW
+    Lambda_Proxy -->|"InvokeAgentRuntime"| Runtime
+    Agent -->|"HTTPS +\nx402 Headers"| CF_Seller
+    LambdaEdge -->|"Verify & Settle"| Facilitator
+    Facilitator -->|"On-chain\nSettlement"| Blockchain
+    Wallet -->|"Wallet Ops"| CDP
+    Lambda_Proxy -->|"eth_call\n(Balance)"| Blockchain
 ```
 
-The three CDK stacks deploy into a single AWS account:
-- **web-ui-infrastructure**: CloudFront + S3 for the React app, API Gateway + Lambda proxy to AgentCore
-- **payer-infrastructure**: IAM roles, secrets, and observability for Bedrock AgentCore (Runtime, Gateway, Agent)
-- **seller-infrastructure**: CloudFront + Lambda@Edge for x402 payment-gated content, S3 content bucket
+Three CDK stacks deploy into a single AWS account:
+- **web-ui-infrastructure** — CloudFront + S3 for the React app, API Gateway + Lambda proxy to AgentCore
+- **payer-infrastructure** — IAM roles, Secrets Manager, CloudWatch observability for Bedrock AgentCore (Runtime, Gateway, Agent)
+- **seller-infrastructure** — CloudFront + Lambda@Edge for x402 payment-gated content, S3 content bucket
 
 AgentCore Gateway acts as an MCP tool server:
 - Content endpoints exposed as discoverable MCP tools via OpenAPI spec
