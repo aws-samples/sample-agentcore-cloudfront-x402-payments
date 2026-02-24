@@ -67,7 +67,7 @@ function App() {
 
       <footer className="app-footer">
         <a 
-          href="https://github.com/joshuamarksmith/x402-agentcore-demo" 
+          href="https://github.com/aws-samples/sample-agentcore-cloudfront-x402-payments" 
           target="_blank" 
           rel="noopener noreferrer"
           className="repo-link"

@@ -12,6 +12,10 @@ This project demonstrates a payment-gated content delivery system using the [x40
 
 ## Architecture
 
+| Agent requests content and receives a 402 payment challenge | Agent pays and content is delivered |
+|:---:|:---:|
+| ![Agent Challenge](assets/agent-challenge.png) | ![Content Received](assets/content-received.png) |
+
 ```mermaid
 flowchart LR
     Browser["🌐 Browser"]
