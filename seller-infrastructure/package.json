@@ -24,7 +24,7 @@
     "@aws-sdk/client-s3": "^3.981.0",
     "@x402/core": "latest",
     "@x402/evm": "latest",
-    "aws-cdk-lib": "^2.170.0",
+    "aws-cdk-lib": "^2.240.0",
     "cdk-nag": "^2.37.55",
     "constructs": "^10.0.0",
     "dotenv": "^17.2.4"
