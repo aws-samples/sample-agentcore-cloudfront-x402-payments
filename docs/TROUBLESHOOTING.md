@@ -47,7 +47,7 @@ cdk --version
 
 **Solution**:
 ```bash
-cd x402-agentcore-demo
+cd sample-agentcore-cloudfront-x402-payments
 git clone https://github.com/coinbase/x402.git
 git clone https://github.com/coinbase/agentkit.git
 ```

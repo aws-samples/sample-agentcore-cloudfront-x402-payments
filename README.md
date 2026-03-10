@@ -130,7 +130,7 @@ The Web UI guides users through a 3-step payment process:
 ## Project Structure
 
 ```
-x402-agentcore-demo/
+sample-agentcore-cloudfront-x402-payments/
 ├── payer-agent/              # AI Agent (Python) - Strands agent with AgentKit wallet
 │   ├── agent/                # Agent implementation & tools
 │   ├── openapi/              # OpenAPI specs for Gateway targets
@@ -248,8 +248,8 @@ See [QUICKSTART.md](QUICKSTART.md) for a streamlined deployment guide.
 ### 1. Clone and setup
 
 ```bash
-git clone https://github.com/joshuamarksmith/x402-agentcore-demo.git
-cd x402-agentcore-demo
+git clone https://github.com/aws-samples/sample-agentcore-cloudfront-x402-payments
+cd sample-agentcore-cloudfront-x402-payments
 
 # Clone dependencies
 git clone https://github.com/coinbase/x402.git
@@ -271,7 +271,7 @@ cp seller-infrastructure/.env.example seller-infrastructure/.env
 ### 3. Deploy seller infrastructure
 
 ```bash
-cd x402-agentcore-demo/seller-infrastructure
+cd sample-agentcore-cloudfront-x402-payments/seller-infrastructure
 npm install
 npx cdk bootstrap  # First time only
 npx cdk deploy
@@ -282,14 +282,14 @@ npx cdk deploy
 This automatically pulls the CloudFront URL from the seller stack and updates `payer-agent/.env`:
 
 ```bash
-cd x402-agentcore-demo
+cd sample-agentcore-cloudfront-x402-payments
 ./scripts/sync-env.sh
 ```
 
 ### 5. Deploy payer infrastructure
 
 ```bash
-cd x402-agentcore-demo/payer-infrastructure
+cd sample-agentcore-cloudfront-x402-payments/payer-infrastructure
 npm install
 npx cdk bootstrap  # First time only
 npx cdk deploy --all
@@ -300,7 +300,7 @@ npx cdk deploy --all
 The deploy script automatically writes `AGENT_RUNTIME_ARN` back to `payer-agent/.env`.
 
 ```bash
-cd x402-agentcore-demo/payer-agent
+cd sample-agentcore-cloudfront-x402-payments/payer-agent
 python -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
@@ -320,12 +320,12 @@ cp web-ui/.env.example web-ui/.env.local
 #   VITE_SELLER_URL=https://dXXXXXXXXXXXXX.cloudfront.net  (from step 3)
 
 # In one terminal, start the backend API server:
-cd x402-agentcore-demo/payer-agent
+cd sample-agentcore-cloudfront-x402-payments/payer-agent
 source .venv/bin/activate
 python -m agent.api_server
 
 # In another terminal, start the frontend:
-cd x402-agentcore-demo/web-ui
+cd sample-agentcore-cloudfront-x402-payments/web-ui
 npm install
 npm run dev
 ```
@@ -333,7 +333,7 @@ npm run dev
 ### 8. Test
 
 ```bash
-cd x402-agentcore-demo/payer-agent
+cd sample-agentcore-cloudfront-x402-payments/payer-agent
 pytest
 
 # Integration tests
@@ -393,6 +393,12 @@ pytest tests/test_error_scenarios.py -v   # Error handling
 - Wallet keys in AWS Secrets Manager
 - Cryptographic signature validation via x402 facilitator
 - Session isolation in AgentCore Runtime
+
+> **⚠️ Web UI Security Notice:** The deployed Web UI (CloudFront + API Gateway) does not include authentication. Anyone with the URL can trigger agent invocations that spend from the connected wallet. This is intentional for demo purposes on Base Sepolia testnet. **Do not deploy with a mainnet wallet or real funds without adding authentication** (e.g., Amazon Cognito, API keys, or IAM auth on API Gateway). If you deploy the Web UI publicly, treat the URL as sensitive and restrict access accordingly.
+
+## Known Issues
+
+- **Python 3.14 + httpcore/anyio incompatibility:** Integration tests that make real HTTP calls via `httpx` fail on Python 3.14 (pre-release) with `TypeError: cannot create weak reference to 'NoneType' object` in `httpcore/_async/connection_pool.py`. Unit tests (which mock HTTP) are unaffected. Use Python 3.12 or 3.13 for integration tests until upstream `httpcore`/`anyio` releases fix this.
 
 ## References
 

@@ -21,8 +21,8 @@ Also required:
 ### Step 1: Clone (2 min)
 
 ```bash
-git clone https://github.com/joshuamarksmith/x402-agentcore-demo.git
-cd x402-agentcore-demo
+git clone https://github.com/aws-samples/sample-agentcore-cloudfront-x402-payments
+cd sample-agentcore-cloudfront-x402-payments
 
 git clone https://github.com/coinbase/x402.git
 git clone https://github.com/coinbase/agentkit.git
@@ -64,7 +64,7 @@ To create a seller wallet, you can:
 ### Step 3: Deploy Seller (10 min)
 
 ```bash
-cd x402-agentcore-demo/seller-infrastructure
+cd sample-agentcore-cloudfront-x402-payments/seller-infrastructure
 npm install
 npx cdk bootstrap  # first time only
 npx cdk deploy
@@ -75,14 +75,14 @@ npx cdk deploy
 This automatically pulls the CloudFront URL from the seller stack and updates `payer-agent/.env` and `web-ui/.env.local`:
 
 ```bash
-cd x402-agentcore-demo
+cd sample-agentcore-cloudfront-x402-payments
 ./scripts/sync-env.sh
 ```
 
 ### Step 5: Deploy Payer (10 min)
 
 ```bash
-cd x402-agentcore-demo/payer-infrastructure
+cd sample-agentcore-cloudfront-x402-payments/payer-infrastructure
 npm install
 npx cdk bootstrap  # first time only
 npx cdk deploy --all
@@ -93,7 +93,7 @@ npx cdk deploy --all
 The deploy script automatically writes `AGENT_RUNTIME_ARN` back to `payer-agent/.env`.
 
 ```bash
-cd x402-agentcore-demo/payer-agent
+cd sample-agentcore-cloudfront-x402-payments/payer-agent
 python -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
@@ -105,7 +105,7 @@ python scripts/deploy_to_agentcore.py
 ### Step 7: Test
 
 ```bash
-cd x402-agentcore-demo/payer-agent
+cd sample-agentcore-cloudfront-x402-payments/payer-agent
 source .venv/bin/activate
 
 # Test MCP tool discovery
@@ -123,12 +123,12 @@ pytest tests/ -v
 Start the backend API server and frontend in separate terminals:
 ```bash
 # Terminal 1: Backend
-cd x402-agentcore-demo/payer-agent
+cd sample-agentcore-cloudfront-x402-payments/payer-agent
 source .venv/bin/activate
 python -m agent.api_server
 
 # Terminal 2: Frontend
-cd x402-agentcore-demo/web-ui
+cd sample-agentcore-cloudfront-x402-payments/web-ui
 npm install
 npm run dev
 ```
