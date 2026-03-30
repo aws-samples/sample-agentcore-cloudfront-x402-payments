@@ -34,4 +34,20 @@ payment flows, addressing the pre-execution verification gap discussed in #11.
 Full test suite covering construction, validation, replay detection, fail-closed
 semantics, and edge cases. Run with `pytest tests/test_oracle_attestation.py -v`.
 
+## Strands Integration
+
+For agents built on the Strands SDK (as used in this reference architecture):
+
+```bash
+pip install headless-oracle-strands
+```
+
+```python
+from headless_oracle_strands import get_market_status, get_market_schedule, list_exchanges
+
+# Use as Strands @tool decorated functions — drop-in for the agent's tool list
+```
+
+Full package: https://pypi.org/project/headless-oracle-strands/
+
 Closes #11
