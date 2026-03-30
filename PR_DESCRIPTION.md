@@ -50,4 +50,6 @@ from headless_oracle_strands import get_market_status, get_market_schedule, list
 
 Full package: https://pypi.org/project/headless-oracle-strands/
 
+Builder and Pro plan holders can also subscribe to real-time status change webhooks via `POST /v5/webhooks/subscribe`, receiving signed receipts on market state transitions without polling — useful for agents that need to act immediately on open/close events rather than gating each request.
+
 Closes #11
