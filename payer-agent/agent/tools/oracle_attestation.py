@@ -1,5 +1,27 @@
 """
 Oracle Attestation Reference Implementation
+============================================
+
+This file is the **reference implementation** — it exists so AWS reviewers can
+inspect the attestation logic in full without installing anything.
+
+For production use, install the published package instead of copying this file:
+
+    pip install headless-oracle-strands
+
+Then import from the package:
+
+    from headless_oracle_strands.attestation import (
+        attestation_ref_from_receipt,
+        is_market_open,
+        validate_ttl,
+        should_refetch,
+        compute_composite_hash,
+        ReplayDetector,
+    )
+
+PyPI: https://pypi.org/project/headless-oracle-strands/
+
 
 Provides composable helpers for integrating external state attestation
 into x402 payment flows. Implements the attestation_ref schema for

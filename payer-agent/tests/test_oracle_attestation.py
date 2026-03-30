@@ -1,20 +1,11 @@
 """Tests for oracle attestation helpers."""
 
 import hashlib
-import importlib.util
-import os
-import sys
 from datetime import datetime, timezone, timedelta
 
 import pytest
 
-# oracle_attestation has no package dependencies — import directly so the test
-# suite runs without the full strands/coinbase dev environment installed.
-_tools_dir = os.path.join(os.path.dirname(__file__), "..", "agent", "tools")
-if _tools_dir not in sys.path:
-    sys.path.insert(0, os.path.abspath(_tools_dir))
-
-from oracle_attestation import (
+from headless_oracle_strands.attestation import (
     attestation_ref_from_receipt,
     oracle_skipped_ref,
     validate_ttl,

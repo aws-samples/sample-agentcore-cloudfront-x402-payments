@@ -15,6 +15,7 @@ AI agent for x402 payment decisions using Strands Agents SDK and Bedrock AgentCo
 - **LLM**: Amazon Bedrock (Claude Sonnet)
 - **Wallet**: Coinbase AgentKit (CDP)
 - **Runtime**: Bedrock AgentCore
+- **Oracle**: [headless-oracle-strands](https://pypi.org/project/headless-oracle-strands/) — pre-trade market state verification
 
 ## Architecture
 
@@ -167,6 +168,17 @@ gateway:
   rate_limiting:
     requests_per_second: 10
 ```
+
+## Oracle Attestation
+
+The payer agent uses [headless-oracle-strands](https://pypi.org/project/headless-oracle-strands/)
+for pre-trade market state verification. The `attestation_ref` helpers embed a
+cryptographically signed oracle receipt into each x402 payment event, creating
+an auditable chain from market-open confirmation through to payment execution.
+
+`agent/tools/oracle_attestation.py` is the **reference implementation** — readable
+source showing the internals. The test suite imports from the published package
+(`headless_oracle_strands.attestation`), not the local copy.
 
 ## License
 
