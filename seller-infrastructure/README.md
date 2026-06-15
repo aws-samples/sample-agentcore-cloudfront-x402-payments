@@ -36,7 +36,7 @@ The WebACL (`seller-infrastructure/lib/waf/monetization-config.ts`, applied in `
 
 A WebACL-level **`MonetizationConfig`** sets the payee wallet, chain (`BASE_SEPOLIA`), base price (`0.001` USDC), and test currency mode. The effective price for a tier is `BASE_AMOUNT × PriceMultiplier`.
 
-> Note: the per-rule `Monetize` action and `MonetizationConfig` are an AWS WAF preview capability. They are injected onto the L1 `CfnWebACL` via `addPropertyOverride` so they pass through CloudFormation verbatim once support ships. Until then the WebACL deploys with Bot Control detection + allow rules only, and the monetization fields are inert overrides.
+> Note: AWS WAF AI traffic monetization is GA, but the per-rule `Monetize` action and `MonetizationConfig` are not yet in the released CloudFormation/CDK schema (SDK/CFN support is expected to follow shortly). They are injected onto the L1 `CfnWebACL` via `addPropertyOverride` so they pass through CloudFormation verbatim — the supported escape hatch until the typed props land.
 
 When a bot requests a paid path without payment it receives **402 Payment Required** with x402 payment requirements; with a valid payment the request is allowed to origin and the content is served.
 

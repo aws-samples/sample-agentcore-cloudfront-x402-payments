@@ -1,12 +1,12 @@
 /**
  * Native AWS WAF x402 monetization config for the seller WebACL.
  *
- * PARKING LOT: `MonetizationConfig` and the per-rule `Monetize` action are an AWS WAF
- * preview capability not yet present in released CloudFormation/CDK/SDK. These pure
- * builders produce the intended declarative shape; cloudfront-stack.ts applies them to
- * the L1 `CfnWebACL` via `addPropertyOverride` so they pass through CloudFormation
- * verbatim once support ships. Until then the WebACL synthesizes with detection +
- * allow rules only; the Monetize actions/MonetizationConfig are inert overrides.
+ * NOTE: AWS WAF AI traffic monetization is GA, but its `MonetizationConfig` and the
+ * per-rule `Monetize` action are not yet modeled in the released CloudFormation/CDK/SDK
+ * (support is expected to follow shortly). These pure builders produce the declarative
+ * shape; cloudfront-stack.ts applies them to the L1 `CfnWebACL` via `addPropertyOverride`
+ * so they pass through CloudFormation verbatim. The typed CDK props don't model the
+ * fields yet, so the override is the supported way to set them until they land.
  *
  * Pricing is derived from the repo's former lib/lambda-edge/content-config.ts and
  * conformed to the AWS WAF AI-traffic-monetization rules: the base price is the

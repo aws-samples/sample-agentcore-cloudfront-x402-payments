@@ -26,11 +26,12 @@ lived in `lib/lambda-edge/content-config.ts`.
 - The payee wallet still comes from `PAYMENT_RECIPIENT_ADDRESS`; network and base price
   are now WebACL-level config.
 
-## Parking lot
+## IaC support status
 
-`MonetizationConfig` and the per-rule `Monetize` action are an AWS WAF **preview**
-capability not yet expressible in released CloudFormation/CDK/SDK. They are injected on
-the L1 `CfnWebACL` via `addPropertyOverride`, so the stack synthesizes the WebACL
-skeleton today and will deploy the monetization fields verbatim once support ships.
-Until then those fields are inert. **Waiting for final validation once the CFN/SDK are
-out — currently parking lot.**
+AWS WAF AI traffic monetization is **GA** (configurable via the WAF console and API
+today). Its `MonetizationConfig` and the per-rule `Monetize` action are **not yet in the
+released CloudFormation/CDK/SDK schema** — SDK/CFN support is expected to follow shortly.
+They are injected on the L1 `CfnWebACL` via `addPropertyOverride`, so the stack
+synthesizes the full WebACL (including the monetization fields) and passes them through
+CloudFormation verbatim. The override is the supported way to set these fields until the
+typed CDK/CFN properties land, at which point this can be simplified to native props.

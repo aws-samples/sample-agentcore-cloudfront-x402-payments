@@ -159,11 +159,12 @@ export class X402SellerStack extends cdk.Stack {
     // =========================================================================
     // Native WAF x402 monetization
     //
-    // PARKING LOT: MonetizationConfig + per-rule Monetize actions are an AWS WAF
-    // preview capability not yet in released CloudFormation/CDK. The WebACL below
-    // synthesizes today with Bot Control detection + allow rules; the monetization
-    // fields are injected via L1 addPropertyOverride so they deploy verbatim once
-    // support ships. Until then they are inert. Tracking: see PR description.
+    // AWS WAF AI traffic monetization is GA. Its MonetizationConfig + per-rule
+    // Monetize action are not yet in the released CloudFormation/CDK (SDK/CFN
+    // support is expected to follow shortly), so the WebACL is built with the
+    // typed Bot Control detection + allow rules and the monetization fields are
+    // injected via L1 addPropertyOverride — the supported escape hatch until the
+    // typed props land. See PR description.
     // =========================================================================
     const payTo = process.env.PAYMENT_RECIPIENT_ADDRESS || DEFAULT_PAY_TO;
     const rules = buildWebAclRules('x402seller');
@@ -179,14 +180,14 @@ export class X402SellerStack extends cdk.Stack {
       },
     });
 
-    // The rule array carries the detection + allow rules and the preview Monetize
-    // actions in the WAF JSON (PascalCase) contract. It is injected via L1
-    // addPropertyOverride rather than the typed `rules` prop so the preview
-    // `Monetize` action passes through CloudFormation verbatim (the released CDK
-    // RuleProperty type does not yet model it).
+    // The rule array carries the detection + allow rules and the Monetize actions
+    // in the WAF JSON (PascalCase) contract. It is injected via L1 addPropertyOverride
+    // rather than the typed `rules` prop so the `Monetize` action passes through
+    // CloudFormation verbatim (the released CDK RuleProperty type does not yet model it).
     webAcl.addPropertyOverride('Rules', rules);
 
-    // PARKING LOT: inject the preview MonetizationConfig (rejected by released CFN).
+    // Inject the MonetizationConfig (not yet in the released CFN/CDK schema, so set
+    // via the L1 escape hatch until the typed property lands).
     webAcl.addPropertyOverride('MonetizationConfig', buildMonetizationConfig(payTo));
 
     // =========================================================================

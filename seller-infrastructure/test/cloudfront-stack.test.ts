@@ -31,7 +31,7 @@ describe('X402SellerStack (native WAF)', () => {
     });
   });
 
-  it('injects the preview MonetizationConfig via override', () => {
+  it('injects the MonetizationConfig via override', () => {
     template.hasResourceProperties('AWS::WAFv2::WebACL', {
       MonetizationConfig: Match.objectLike({
         CurrencyMode: 'TEST',
