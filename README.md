@@ -9,7 +9,7 @@ HTTP 402 payment-gated content delivery using AWS Bedrock AgentCore and AgentCor
 This project demonstrates a payment-gated content delivery system using the [x402 protocol](https://github.com/coinbase/x402):
 
 - **Payer**: AI agent on Bedrock AgentCore Runtime with AgentCore Payments (ProcessPayment API)
-- **Seller**: CloudFront + Lambda@Edge for x402 payment verification
+- **Seller**: CloudFront + AWS WAF native x402 monetization (see [docs/native-waf-x402-migration.md](docs/native-waf-x402-migration.md))
 - **Web UI**: React demo interface
 
 ## Architecture
