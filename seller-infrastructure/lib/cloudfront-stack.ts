@@ -177,9 +177,14 @@ export class X402SellerStack extends cdk.Stack {
         cloudWatchMetricsEnabled: true,
         metricName: `x402-seller-acl-${suffix}`,
       },
-      // L1 rules carry the detection + allow + (override-injected) Monetize rules.
-      rules: rules as unknown as wafv2.CfnWebACL.RuleProperty[],
     });
+
+    // The rule array carries the detection + allow rules and the preview Monetize
+    // actions in the WAF JSON (PascalCase) contract. It is injected via L1
+    // addPropertyOverride rather than the typed `rules` prop so the preview
+    // `Monetize` action passes through CloudFormation verbatim (the released CDK
+    // RuleProperty type does not yet model it).
+    webAcl.addPropertyOverride('Rules', rules);
 
     // PARKING LOT: inject the preview MonetizationConfig (rejected by released CFN).
     webAcl.addPropertyOverride('MonetizationConfig', buildMonetizationConfig(payTo));
