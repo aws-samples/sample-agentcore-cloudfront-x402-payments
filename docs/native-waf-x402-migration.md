@@ -21,8 +21,8 @@ lived in `lib/lambda-edge/content-config.ts`.
   - **human-allow** — requests with no bot label are served free.
   - **allow-discovery** — `/mcp/*` and `/.well-known/*` are free (agents must read
     discovery before they can pay).
-  - **Monetize rules** — one per content tier, `PriceMultiplier` × a $0.0005 base,
-    reproducing the original six prices ($0.0005–$0.01) on Base Sepolia USDC.
+  - **Monetize rules** — one per content tier, `PriceMultiplier` × a $0.001 base (the WAF service minimum),
+    reproducing the original prices ($0.001–$0.01) on Base Sepolia USDC. The original $0.0005 weather price is floored to the $0.001 minimum.
 - The payee wallet still comes from `PAYMENT_RECIPIENT_ADDRESS`; network and base price
   are now WebACL-level config.
 

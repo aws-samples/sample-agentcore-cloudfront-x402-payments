@@ -34,7 +34,7 @@ The WebACL (`seller-infrastructure/lib/waf/monetization-config.ts`, applied in `
 3. **`allow-discovery`** (priority 2) — free discovery for `/mcp/*` and `/.well-known/*` (terminating Allow), so agents can fetch capability/discovery documents without paying.
 4. **`Monetize-<tier>`** (priority 10+) — bots reaching these rules pay per request. Each tier matches a URI prefix (STARTS_WITH) and applies a `Monetize` action with a `PriceMultiplier`.
 
-A WebACL-level **`MonetizationConfig`** sets the payee wallet, chain (`BASE_SEPOLIA`), base price (`0.0005` USDC), and test currency mode. The effective price for a tier is `BASE_AMOUNT × PriceMultiplier`.
+A WebACL-level **`MonetizationConfig`** sets the payee wallet, chain (`BASE_SEPOLIA`), base price (`0.001` USDC), and test currency mode. The effective price for a tier is `BASE_AMOUNT × PriceMultiplier`.
 
 > Note: the per-rule `Monetize` action and `MonetizationConfig` are an AWS WAF preview capability. They are injected onto the L1 `CfnWebACL` via `addPropertyOverride` so they pass through CloudFormation verbatim once support ships. Until then the WebACL deploys with Bot Control detection + allow rules only, and the monetization fields are inert overrides.
 
@@ -78,20 +78,22 @@ Set in `seller-infrastructure/.env`. `PAYMENT_RECIPIENT_ADDRESS` is read at synt
 |-----------------|-------------|
 | `PAYMENT_RECIPIENT_ADDRESS` | Wallet address that receives payments (WebACL `MonetizationConfig.CryptoConfig.PaymentNetworks[].WalletAddress`) |
 
-The chain (`BASE_SEPOLIA`), base price (`0.0005` USDC), and currency mode (`TEST`) are defined in `lib/waf/monetization-config.ts`.
+The chain (`BASE_SEPOLIA`), base price (`0.001` USDC), and currency mode (`TEST`) are defined in `lib/waf/monetization-config.ts`.
 
 ### Pricing & Tiers
 
-Pricing lives in `lib/waf/monetization-config.ts`. The base unit price is `BASE_AMOUNT` (`0.0005` USDC) and each tier is a URI prefix with a `PriceMultiplier`:
+Pricing lives in `lib/waf/monetization-config.ts`. The base unit price is `BASE_AMOUNT` (`0.001` USDC — the AWS WAF service minimum) and each tier is a URI prefix with a `PriceMultiplier`:
 
 | Tier | Prefix (STARTS_WITH) | Multiplier | Price (USDC) |
 |------|----------------------|-----------:|-------------:|
-| `weather` | `/api/weather-data` | 1 | 0.0005 |
-| `article` | `/api/premium-article` | 2 | 0.001 |
-| `market` | `/api/market-analysis` | 4 | 0.002 |
-| `tutorial` / `api-tutorial` | `/tutorial`, `/api/tutorial` | 6 | 0.003 |
-| `research` / `api-research` | `/research-report`, `/api/research-report` | 10 | 0.005 |
-| `dataset` / `api-dataset` | `/dataset`, `/api/dataset` | 20 | 0.01 |
+| `weather` | `/api/weather-data` | 1 | 0.001 |
+| `article` | `/api/premium-article` | 1 | 0.001 |
+| `market` | `/api/market-analysis` | 2 | 0.002 |
+| `tutorial` / `api-tutorial` | `/tutorial`, `/api/tutorial` | 3 | 0.003 |
+| `research` / `api-research` | `/research-report`, `/api/research-report` | 5 | 0.005 |
+| `dataset` / `api-dataset` | `/dataset`, `/api/dataset` | 10 | 0.01 |
+
+> The original weather price was $0.0005, below AWS WAF's $0.001 minimum price per request, so it is floored to the $0.001 base.
 
 To add or reprice content, add a `Tier` to the `TIERS` array (it is ordered most-specific-first) and ensure the matching path is served from the S3 origin / a CloudFront behavior in `lib/cloudfront-stack.ts`.
 

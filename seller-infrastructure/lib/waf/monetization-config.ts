@@ -8,9 +8,13 @@
  * verbatim once support ships. Until then the WebACL synthesizes with detection +
  * allow rules only; the Monetize actions/MonetizationConfig are inert overrides.
  *
- * Pricing is derived from the repo's former lib/lambda-edge/content-config.ts:
- * base $0.0005 USDC on Base Sepolia, per-tier PriceMultiplier reproduces the six
- * original prices ($0.0005 – $0.01).
+ * Pricing is derived from the repo's former lib/lambda-edge/content-config.ts and
+ * conformed to the AWS WAF AI-traffic-monetization rules: the base price is the
+ * service minimum of $0.001 USDC (decimal string, <= 3 dp), and per-tier
+ * PriceMultiplier reproduces the original prices ($0.001 – $0.01) on Base Sepolia.
+ * The original weather price ($0.0005) is below the $0.001 service minimum, so it
+ * is floored to the base (×1).
+ * See https://docs.aws.amazon.com/waf/latest/developerguide/waf-ai-traffic-monetization-pricing.html
  */
 
 /** Bot Control stamps every detected bot with a label in this namespace. */
@@ -19,8 +23,11 @@ export const BOT_NAMESPACE = 'awswaf:managed:aws:bot-control:bot:';
 /** Pinned Bot Control managed-rule-group version (>= v6 for agentic/AI-bot detections). */
 export const BOT_CONTROL_VERSION = 'Version_6.0';
 
-/** Base unit price (USDC). Each tier multiplies this. */
-export const BASE_AMOUNT = '0.0005';
+/**
+ * Base unit price (USDC), as a decimal string with <= 3 decimal places. This is the
+ * AWS WAF service minimum ($0.001 USDC per request); each tier multiplies it.
+ */
+export const BASE_AMOUNT = '0.001';
 
 export interface Tier {
   /** Short name (used in rule name + metric). */
@@ -35,17 +42,22 @@ export interface Tier {
  * Tiers ordered most-specific-first. The original repo priced both bare and
  * /api-prefixed variants identically, so each tier lists its matched prefix; the
  * cheapest catch (weather) and the explicit content prefixes are distinct rules.
+ *
+ * Multipliers reproduce the original USDC prices off the $0.001 base:
+ *   weather $0.0005 → floored to $0.001 (×1, the service minimum)
+ *   article $0.001 (×1), market $0.002 (×2), tutorial $0.003 (×3),
+ *   research $0.005 (×5), dataset $0.01 (×10).
  */
 export const TIERS: Tier[] = [
   { name: 'weather', prefix: '/api/weather-data', multiplier: 1 },
-  { name: 'article', prefix: '/api/premium-article', multiplier: 2 },
-  { name: 'market', prefix: '/api/market-analysis', multiplier: 4 },
-  { name: 'tutorial', prefix: '/tutorial', multiplier: 6 },
-  { name: 'api-tutorial', prefix: '/api/tutorial', multiplier: 6 },
-  { name: 'research', prefix: '/research-report', multiplier: 10 },
-  { name: 'api-research', prefix: '/api/research-report', multiplier: 10 },
-  { name: 'dataset', prefix: '/dataset', multiplier: 20 },
-  { name: 'api-dataset', prefix: '/api/dataset', multiplier: 20 },
+  { name: 'article', prefix: '/api/premium-article', multiplier: 1 },
+  { name: 'market', prefix: '/api/market-analysis', multiplier: 2 },
+  { name: 'tutorial', prefix: '/tutorial', multiplier: 3 },
+  { name: 'api-tutorial', prefix: '/api/tutorial', multiplier: 3 },
+  { name: 'research', prefix: '/research-report', multiplier: 5 },
+  { name: 'api-research', prefix: '/api/research-report', multiplier: 5 },
+  { name: 'dataset', prefix: '/dataset', multiplier: 10 },
+  { name: 'api-dataset', prefix: '/api/dataset', multiplier: 10 },
 ];
 
 interface VisibilityConfig {
