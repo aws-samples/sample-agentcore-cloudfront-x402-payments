@@ -109,17 +109,25 @@ cdk deploy
 cdk import
 ```
 
-### Lambda@Edge deployment fails
+### WebACL creation/association fails
 
-**Cause**: Lambda@Edge must be deployed to `us-east-1`.
+**Cause**: A `CLOUDFRONT`-scoped WAFv2 WebACL (and the CloudFront distribution it associates with) must live in `us-east-1`.
 
 **Solution**:
-Lambda@Edge requires `us-east-1`, which is hardcoded in the CDK stack. No `.env` configuration needed.
+The seller stack hardcodes `us-east-1`, so no `.env` configuration is needed. If the WebACL fails to create or associate, confirm you are deploying to `us-east-1` and that your IAM principal has `wafv2:*` and `cloudfront:*` permissions.
 
 Redeploy:
 ```bash
 cd seller-infrastructure
 cdk deploy
+```
+
+Verify the WebACL is associated with the distribution:
+```bash
+aws wafv2 list-resources-for-web-acl \
+  --web-acl-arn <WEB_ACL_ARN> \
+  --resource-type CLOUDFRONT \
+  --region us-east-1
 ```
 
 ### "Access Denied" when invoking AgentCore
@@ -283,37 +291,38 @@ Check the `X-PAYMENT-REQUIRED` header for specific error:
 **Solution**:
 1. Check CloudFront distribution settings
 2. Verify S3 bucket policy allows CloudFront access
-3. Check CORS headers in Lambda@Edge response
+3. Check CORS headers in the CloudFront response headers policy
 
-### Lambda@Edge not triggering
+### WAF monetization not applied (requests not gated)
 
-**Cause**: Function not associated with CloudFront behavior.
+**Cause**: The WebACL is not associated with the distribution, the request did not match a `Monetize` rule, or it was allowed earlier by the `human-allow` / `allow-discovery` rules.
 
 **Solution**:
-1. Verify Lambda@Edge association in CloudFront console
-2. Check function is deployed to `us-east-1`
-3. Ensure function has correct execution role
+1. Verify the WebACL is associated with the distribution (`aws wafv2 list-resources-for-web-acl --resource-type CLOUDFRONT --region us-east-1`).
+2. Confirm the WebACL is `CLOUDFRONT`-scoped and deployed to `us-east-1`.
+3. Remember the rule order: Bot Control (detect) → `human-allow` (non-bots pass free) → `allow-discovery` (`/mcp/*`, `/.well-known/*` pass free) → `Monetize-<tier>`. Only requests labeled as bots by Bot Control reach the Monetize rules.
+4. Use **WAF sampled requests** (WebACL → Sampled requests) to see which rule a given request matched.
 
 ### Content not found (404)
 
 **Cause**: Content path not configured or S3 content not uploaded.
 
 **Solution**:
-1. Check `content-config.ts` for the endpoint
+1. Verify a CloudFront behavior and a matching tier prefix exist for the path (`lib/cloudfront-stack.ts` and `lib/waf/monetization-config.ts`)
 2. For S3 content, upload using:
 ```bash
 cd seller-infrastructure
 ./scripts/upload-content.sh YOUR_BUCKET_NAME
 ```
 
-### Payment verification failing
+### Payment requirements not returned / wrong price
 
-**Cause**: Facilitator service unreachable or payload malformed.
+**Cause**: The WebACL `MonetizationConfig` or a tier `PriceMultiplier` is misconfigured.
 
 **Solution**:
-1. Check facilitator URL is correct: `https://facilitator.x402.org`
-2. Verify payment payload structure matches x402 v2 spec
-3. Check Lambda@Edge logs in CloudWatch
+1. Verify `PAYMENT_RECIPIENT_ADDRESS` (the payee wallet) is set before synth/deploy
+2. Confirm the chain (`BASE_SEPOLIA`), base price (`0.0005` USDC), and tier multipliers in `lib/waf/monetization-config.ts`
+3. Inspect **WAF sampled requests / CloudWatch metrics** (namespace `AWS/WAFV2`, metric names prefixed `x402seller-*`) to confirm which rule matched the request
 
 ---
 
@@ -521,9 +530,15 @@ for tool in tools:
 curl -v "$X402_SELLER_CLOUDFRONT_URL/api/premium-article"
 ```
 
-4. Check Lambda@Edge logs for the request:
+4. Check which WAF rule matched the request via sampled requests:
 ```bash
-aws logs tail /aws/lambda/us-east-1.PaymentVerifier --follow
+aws wafv2 get-sampled-requests \
+  --web-acl-arn <WEB_ACL_ARN> \
+  --rule-metric-name x402seller-monetize-article \
+  --scope CLOUDFRONT \
+  --region us-east-1 \
+  --time-window StartTime=$(date -u -v-10M +%s),EndTime=$(date -u +%s) \
+  --max-items 100
 ```
 
 ### Gateway SigV4 Authentication Fails
@@ -651,7 +666,7 @@ aws cloudwatch get-metric-statistics \
   --statistics Average
 ```
 
-3. Check Lambda@Edge execution time (max 30 seconds for viewer-request)
+3. Check WAF WebACL evaluation in CloudWatch (namespace `AWS/WAFV2`); WebACL rule evaluation adds negligible latency
 
 4. Verify CloudFront origin timeout settings
 
@@ -852,14 +867,22 @@ paid = request_content_with_payment("/api/premium-article")
 print(paid)
 ```
 
-### Check CloudWatch logs
+### Check WAF metrics and sampled requests
+
+The seller side has no Lambda logs — inspect the WebACL instead.
 
 ```bash
-# Lambda@Edge logs (check multiple regions)
-aws logs describe-log-groups --log-group-name-prefix "/aws/lambda/us-east-1"
+# WAF WebACL / per-rule metrics (namespace AWS/WAFV2, metric names prefixed x402seller-*)
+aws cloudwatch list-metrics --namespace AWS/WAFV2 --region us-east-1
 
-# Get recent logs
-aws logs tail /aws/lambda/us-east-1.PaymentVerifier --follow
+# Inspect a sample of requests matched by a rule
+aws wafv2 get-sampled-requests \
+  --web-acl-arn <WEB_ACL_ARN> \
+  --rule-metric-name x402seller-monetize-article \
+  --scope CLOUDFRONT \
+  --region us-east-1 \
+  --time-window StartTime=$(date -u -v-10M +%s),EndTime=$(date -u +%s) \
+  --max-items 100
 ```
 
 ### Verify AWS credentials

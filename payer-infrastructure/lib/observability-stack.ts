@@ -9,7 +9,7 @@ import { Construct } from 'constructs';
  * 
  * This stack creates comprehensive dashboards for monitoring:
  * - Payer Agent (AgentCore Gateway) metrics
- * - Seller Infrastructure (CloudFront + Lambda@Edge) metrics
+ * - Seller Infrastructure (CloudFront + AWS WAF native x402 monetization) metrics
  * - End-to-end payment flow metrics
  */
 
@@ -73,7 +73,7 @@ export class ObservabilityStack extends cdk.Stack {
         markdown: `# x402 Enterprise Demo - Overview Dashboard
 Monitor the complete payment flow from payer agent to seller infrastructure.
         
-**Architecture:** Payer Agent (AgentCore) → CloudFront (Seller) → Lambda@Edge (Payment Verification)`,
+**Architecture:** Payer Agent (AgentCore) → CloudFront (Seller) → AWS WAF (native x402 monetization)`,
         width: 24,
         height: 2,
       }),
@@ -410,7 +410,7 @@ Monitor the AgentCore-based payer agent that handles payment signing and content
     this.sellerDashboard.addWidgets(
       new cloudwatch.TextWidget({
         markdown: `# x402 Seller Infrastructure Dashboard
-Monitor CloudFront distribution and Lambda@Edge payment verification.`,
+Monitor the CloudFront distribution and the AWS WAF WebACL that performs native x402 monetization.`,
         width: 24,
         height: 2,
       }),
@@ -496,41 +496,64 @@ Monitor CloudFront distribution and Lambda@Edge payment verification.`,
       }),
     );
 
-    // Lambda@Edge Payment Verifier Metrics
+    // Payment Monetization (AWS WAF) Metrics
+    //
+    // The seller side is now gated by a CLOUDFRONT-scoped WAFv2 WebACL (no
+    // Lambda@Edge), which emits metrics in the AWS/WAFV2 namespace per rule
+    // (CountedRequests / AllowedRequests / BlockedRequests, dimensioned by
+    // WebACL + Rule + Region=Global). The WebACL name carries a deploy-time
+    // suffix, so the WebACL dimension is left as a placeholder for the operator
+    // to fill in; the per-tier rule names are x402seller-monetize-<tier>.
     this.sellerDashboard.addWidgets(
       new cloudwatch.TextWidget({
-        markdown: '## Payment Verifier (Lambda@Edge)',
+        markdown: `## Payment Monetization (AWS WAF)
+Tracks the WAF WebACL that gates paid content. Replace the \`WebACL\` dimension below with your deployed WebACL name (\`x402-seller-acl-<suffix>\`). Per-rule metric names are prefixed \`x402seller-*\` (e.g. \`x402seller-monetize-article\`).`,
         width: 24,
-        height: 1,
+        height: 2,
       }),
     );
 
     this.sellerDashboard.addWidgets(
       new cloudwatch.GraphWidget({
-        title: 'Payment Processing',
+        title: 'WAF Request Disposition',
         left: [
           new cloudwatch.Metric({
-            namespace: 'X402/PaymentVerifier',
-            metricName: 'PaymentRequired',
+            namespace: 'AWS/WAFV2',
+            metricName: 'CountedRequests',
+            dimensionsMap: {
+              WebACL: 'x402-seller-acl',
+              Rule: 'AWSBotControl',
+              Region: 'Global',
+            },
             statistic: 'Sum',
             period: cdk.Duration.minutes(5),
-            label: '402 Sent',
+            label: 'Bots Detected (Counted)',
             color: '#ff7f0e',
           }),
           new cloudwatch.Metric({
-            namespace: 'X402/PaymentVerifier',
-            metricName: 'PaymentReceived',
+            namespace: 'AWS/WAFV2',
+            metricName: 'AllowedRequests',
+            dimensionsMap: {
+              WebACL: 'x402-seller-acl',
+              Rule: 'human-allow',
+              Region: 'Global',
+            },
             statistic: 'Sum',
             period: cdk.Duration.minutes(5),
-            label: 'Received',
+            label: 'Humans Allowed',
             color: '#1f77b4',
           }),
           new cloudwatch.Metric({
-            namespace: 'X402/PaymentVerifier',
-            metricName: 'PaymentSettled',
+            namespace: 'AWS/WAFV2',
+            metricName: 'AllowedRequests',
+            dimensionsMap: {
+              WebACL: 'x402-seller-acl',
+              Rule: 'allow-discovery',
+              Region: 'Global',
+            },
             statistic: 'Sum',
             period: cdk.Duration.minutes(5),
-            label: 'Settled',
+            label: 'Discovery Allowed',
             color: '#2ca02c',
           }),
         ],

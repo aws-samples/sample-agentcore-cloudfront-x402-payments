@@ -213,8 +213,8 @@ Create a new session with a higher `maxSpendAmount` using the management role.
 **ProcessPayment fails with "Insufficient funds":**
 Fund the wallet with USDC at https://faucet.circle.com/ (select Base Sepolia network).
 
-**Lambda@Edge region:**
-Lambda@Edge requires `us-east-1`. This is hardcoded in the CDK stack — no configuration needed.
+**WAF / region:**
+The seller's `CLOUDFRONT`-scoped WAF WebACL (and the CloudFront distribution) must be in `us-east-1`. This is hardcoded in the CDK stack — no configuration needed.
 
 ## References
 

@@ -6,7 +6,7 @@ This document provides comprehensive API documentation for the x402 payment-gate
 
 - [Overview](#overview)
 - [Authentication](#authentication)
-- [Seller API (CloudFront + Lambda@Edge)](#seller-api-cloudfront--lambdaedge)
+- [Seller API (CloudFront + AWS WAF)](#seller-api-cloudfront--aws-waf)
   - [Protected Content Endpoints](#protected-content-endpoints)
   - [Request/Response Flow](#requestresponse-flow)
   - [x402 Protocol Headers](#x402-protocol-headers)
@@ -37,7 +37,7 @@ This document provides comprehensive API documentation for the x402 payment-gate
 
 The x402 AWS Enterprise Demo consists of two main API surfaces:
 
-1. **Seller API**: CloudFront distribution with Lambda@Edge that serves payment-gated content using the x402 v2 protocol
+1. **Seller API**: CloudFront distribution with AWS WAF native x402 monetization (a `CLOUDFRONT`-scoped WebACL) that serves payment-gated content using the x402 v2 protocol
 2. **Payer Agent API**: AgentCore Runtime that provides access to the AI agent for automated payment decisions
 
 ### Base URLs
@@ -74,7 +74,7 @@ Required IAM permission: `bedrock-agentcore:InvokeAgentRuntime`
 
 ---
 
-## Seller API (CloudFront + Lambda@Edge)
+## Seller API (CloudFront + AWS WAF)
 
 ### Protected Content Endpoints
 
@@ -1733,7 +1733,7 @@ interface SettlementResponse {
 
 ### Seller API
 
-No explicit rate limiting at the application level. CloudFront and Lambda@Edge have built-in limits.
+No explicit rate limiting at the application level. CloudFront and AWS WAF have built-in limits.
 
 ### AgentCore Gateway
 
