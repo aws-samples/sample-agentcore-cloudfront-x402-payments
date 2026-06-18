@@ -22,15 +22,23 @@ Endpoints like `/api/premium-article` return:
 ## Architecture
 
 - **CloudFront** — Content delivery
-- **Lambda@Edge** — Payment verification at edge locations
+- **AWS WAF (native x402 monetization)** — A `CLOUDFRONT`-scoped WAFv2 WebACL associated with the distribution charges per request at the edge
 - **S3** — Content storage (optional)
 
 ## How It Works
 
-1. Client requests content without payment → 402 response with payment requirements
-2. Client requests content with payment signature → Content delivered, payment settled
+The WebACL (`seller-infrastructure/lib/waf/monetization-config.ts`, applied in `lib/cloudfront-stack.ts`) gates content natively — there is no Lambda. Its rules run in priority order:
 
-The `payment-verifier` Lambda@Edge function intercepts requests, validates payment signatures, and either returns a 402 or serves the content.
+1. **`AWSBotControl`** (priority 0) — the AWS Managed Bot Control rule group, pinned to `Version_6.0` for agentic/AI-bot detections, in `Count`/detect mode. It stamps detected bots with `awswaf:managed:aws:bot-control:bot:*` labels.
+2. **`human-allow`** (priority 1) — any request **not** carrying a bot label is allowed through unmonetized (terminating Allow).
+3. **`allow-discovery`** (priority 2) — free discovery for `/mcp/*` and `/.well-known/*` (terminating Allow), so agents can fetch capability/discovery documents without paying.
+4. **`Monetize-<tier>`** (priority 10+) — bots reaching these rules pay per request. Each tier matches a URI prefix (STARTS_WITH) and applies a `Monetize` action with a `PriceMultiplier`.
+
+A WebACL-level **`MonetizationConfig`** sets the payee wallet, chain (`BASE_SEPOLIA`), base price (`0.001` USDC), and test currency mode. The effective price for a tier is `BASE_AMOUNT × PriceMultiplier`.
+
+> Note: AWS WAF AI traffic monetization is GA, but the per-rule `Monetize` action and `MonetizationConfig` are not yet in the released CloudFormation/CDK schema (SDK/CFN support is expected to follow shortly). They are injected onto the L1 `CfnWebACL` via `addPropertyOverride` so they pass through CloudFormation verbatim — the supported escape hatch until the typed props land.
+
+When a bot requests a paid path without payment it receives **402 Payment Required** with x402 payment requirements; with a valid payment the request is allowed to origin and the content is served.
 
 ## Content Types
 
@@ -64,34 +72,30 @@ Note the CloudFront distribution URL from the output.
 
 ### Payment Settings
 
-Set in `seller-infrastructure/.env` (CDK injects into the Lambda@Edge bundle at deploy time):
+Set in `seller-infrastructure/.env`. `PAYMENT_RECIPIENT_ADDRESS` is read at synth time (`lib/cloudfront-stack.ts`) and becomes the **payee wallet in the WebACL `MonetizationConfig`** — it is no longer injected into any Lambda bundle. If unset, the stack falls back to a built-in default address.
 
-| Setting | `.env` Variable | Description |
-|---------|----------------|-------------|
-| `DEFAULT_PAY_TO` | `PAYMENT_RECIPIENT_ADDRESS` | Wallet address to receive payments |
-| `DEFAULT_NETWORK` | — | Network ID (default: `eip155:84532` for Base Sepolia) |
-| `DEFAULT_ASSET` | — | Asset contract address (default: USDC on Base Sepolia) |
+| `.env` Variable | Description |
+|-----------------|-------------|
+| `PAYMENT_RECIPIENT_ADDRESS` | Wallet address that receives payments (WebACL `MonetizationConfig.CryptoConfig.PaymentNetworks[].WalletAddress`) |
 
-### Adding Content
+The chain (`BASE_SEPOLIA`), base price (`0.001` USDC), and currency mode (`TEST`) are defined in `lib/waf/monetization-config.ts`.
 
-Update `content-config.ts`:
+### Pricing & Tiers
 
-```typescript
-contentManager.setContentItem({
-  id: 'my-content',
-  path: '/api/my-content',
-  title: 'My Premium Content',
-  description: 'Description',
-  mimeType: 'application/json',
-  pricing: createPaymentRequirements('1500'), // 0.0015 USDC
-  source: {
-    type: 'inline',
-    data: { /* content */ },
-  },
-});
-```
+Pricing lives in `lib/waf/monetization-config.ts`. The base unit price is `BASE_AMOUNT` (`0.001` USDC — the AWS WAF service minimum) and each tier is a URI prefix with a `PriceMultiplier`:
 
-Source types: `inline`, `dynamic` (with generator), or `s3` (with bucket/key).
+| Tier | Prefix (STARTS_WITH) | Multiplier | Price (USDC) |
+|------|----------------------|-----------:|-------------:|
+| `weather` | `/api/weather-data` | 1 | 0.001 |
+| `article` | `/api/premium-article` | 1 | 0.001 |
+| `market` | `/api/market-analysis` | 2 | 0.002 |
+| `tutorial` / `api-tutorial` | `/tutorial`, `/api/tutorial` | 3 | 0.003 |
+| `research` / `api-research` | `/research-report`, `/api/research-report` | 5 | 0.005 |
+| `dataset` / `api-dataset` | `/dataset`, `/api/dataset` | 10 | 0.01 |
+
+> The original weather price was $0.0005, below AWS WAF's $0.001 minimum price per request, so it is floored to the $0.001 base.
+
+To add or reprice content, add a `Tier` to the `TIERS` array (it is ordered most-specific-first) and ensure the matching path is served from the S3 origin / a CloudFront behavior in `lib/cloudfront-stack.ts`.
 
 ## Testing
 
@@ -106,8 +110,10 @@ curl -i -H "X-PAYMENT: <payment-header>" \
 
 ## Monitoring
 
-Lambda@Edge logs appear in CloudWatch in the region where the function executes:
-- Log group: `/aws/lambda/us-east-1.PaymentVerifier`
+There are no Lambda logs to inspect. Observe the WebACL instead via AWS WAF metrics and sampled requests:
+
+- **CloudWatch metrics** — each rule emits metrics in the `AWS/WAFV2` namespace (the WebACL and every rule set `CloudWatchMetricsEnabled: true` with metric names prefixed `x402seller-*`, e.g. `x402seller-bot-control`, `x402seller-human-allow`, `x402seller-allow-discovery`, `x402seller-monetize-<tier>`).
+- **Sampled requests** — `SampledRequestsEnabled: true` on every rule, so you can inspect a sample of matched requests per rule in the WAF console (WebACL → Sampled requests) to see which tier/rule a request hit.
 
 ## Cleanup
 

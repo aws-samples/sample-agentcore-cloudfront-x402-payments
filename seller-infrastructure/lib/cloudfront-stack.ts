@@ -1,31 +1,25 @@
 import * as cdk from 'aws-cdk-lib';
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
-import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as s3 from 'aws-cdk-lib/aws-s3';
+import * as wafv2 from 'aws-cdk-lib/aws-wafv2';
 import { Construct } from 'constructs';
 import { NagSuppressions } from 'cdk-nag';
-import * as path from 'path';
-import * as fs from 'fs';
 import * as dotenv from 'dotenv';
+import * as path from 'path';
+import {
+  buildMonetizationConfig,
+  buildWebAclRules,
+} from './waf/monetization-config';
 
-// Load .env from project root
+// Load .env from project root (PAYMENT_RECIPIENT_ADDRESS = payee wallet)
 dotenv.config({ path: path.join(__dirname, '..', '.env') });
+
+const DEFAULT_PAY_TO = '0x24842F3136Fa2a3df835d36b4c3cb4972d405502';
 
 export class X402SellerStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
-
-    // Write deploy-config.json into lambda-edge/ so it gets bundled
-    const lambdaEdgeDir = path.join(__dirname, 'lambda-edge');
-    const deployConfig: Record<string, string> = {};
-    if (process.env.PAYMENT_RECIPIENT_ADDRESS) {
-      deployConfig.payTo = process.env.PAYMENT_RECIPIENT_ADDRESS;
-    }
-    fs.writeFileSync(
-      path.join(lambdaEdgeDir, 'deploy-config.json'),
-      JSON.stringify(deployConfig, null, 2)
-    );
 
     // Unique suffix for policy names to avoid conflicts on redeploy
     const suffix = cdk.Names.uniqueId(this).slice(-8);
@@ -42,25 +36,6 @@ export class X402SellerStack extends cdk.Stack {
         },
       ],
     });
-
-    // Create Lambda@Edge function for payment verification
-    const paymentVerifier = new cloudfront.experimental.EdgeFunction(
-      this,
-      'PaymentVerifier',
-      {
-        runtime: lambda.Runtime.NODEJS_20_X,
-        handler: 'payment-verifier.handler',
-        code: lambda.Code.fromAsset(path.join(__dirname, 'lambda-edge')),
-        memorySize: 128,
-        timeout: cdk.Duration.seconds(20),
-        // Note: Lambda@Edge doesn't support environment variables directly
-        // The bucket name is configured in content-config.ts via CONTENT_BUCKET env var
-        // which must be set at build time or use the default bucket name
-      }
-    );
-
-    // Grant Lambda@Edge permission to read from the content bucket
-    contentBucket.grantRead(paymentVerifier);
 
     // =========================================================================
     // Caching Policies
@@ -119,29 +94,6 @@ export class X402SellerStack extends cdk.Stack {
         cookieBehavior: cloudfront.CacheCookieBehavior.none(),
         enableAcceptEncodingGzip: true,
         enableAcceptEncodingBrotli: true,
-      }
-    );
-
-    // =========================================================================
-    // Origin Request Policies
-    // =========================================================================
-
-    // Origin request policy for payment APIs
-    // Forward payment headers to Lambda@Edge for verification
-    const paymentApiOriginRequestPolicy = new cloudfront.OriginRequestPolicy(
-      this,
-      'PaymentApiOriginRequestPolicy',
-      {
-        originRequestPolicyName: `X402-PaymentApi-ForwardHeaders-${suffix}`,
-        comment: 'Forward payment headers to origin for x402 verification',
-        headerBehavior: cloudfront.OriginRequestHeaderBehavior.allowList(
-          'X-Payment-Signature',
-          'Payment-Signature',
-          'Content-Type',
-          'Accept'
-        ),
-        queryStringBehavior: cloudfront.OriginRequestQueryStringBehavior.all(),
-        cookieBehavior: cloudfront.OriginRequestCookieBehavior.none(),
       }
     );
 
@@ -205,27 +157,55 @@ export class X402SellerStack extends cdk.Stack {
     );
 
     // =========================================================================
+    // Native WAF x402 monetization
+    //
+    // AWS WAF AI traffic monetization is GA. Its MonetizationConfig + per-rule
+    // Monetize action are not yet in the released CloudFormation/CDK (SDK/CFN
+    // support is expected to follow shortly), so the WebACL is built with the
+    // typed Bot Control detection + allow rules and the monetization fields are
+    // injected via L1 addPropertyOverride — the supported escape hatch until the
+    // typed props land. See PR description.
+    // =========================================================================
+    const payTo = process.env.PAYMENT_RECIPIENT_ADDRESS || DEFAULT_PAY_TO;
+    const rules = buildWebAclRules('x402seller');
+
+    const webAcl = new wafv2.CfnWebACL(this, 'X402WebACL', {
+      name: `x402-seller-acl-${suffix}`,
+      scope: 'CLOUDFRONT',
+      defaultAction: { allow: {} },
+      visibilityConfig: {
+        sampledRequestsEnabled: true,
+        cloudWatchMetricsEnabled: true,
+        metricName: `x402-seller-acl-${suffix}`,
+      },
+    });
+
+    // The rule array carries the detection + allow rules and the Monetize actions
+    // in the WAF JSON (PascalCase) contract. It is injected via L1 addPropertyOverride
+    // rather than the typed `rules` prop so the `Monetize` action passes through
+    // CloudFormation verbatim (the released CDK RuleProperty type does not yet model it).
+    webAcl.addPropertyOverride('Rules', rules);
+
+    // Inject the MonetizationConfig (not yet in the released CFN/CDK schema, so set
+    // via the L1 escape hatch until the typed property lands).
+    webAcl.addPropertyOverride('MonetizationConfig', buildMonetizationConfig(payTo));
+
+    // =========================================================================
     // CloudFront Distribution
     // =========================================================================
 
     // Create CloudFront distribution with optimized caching
     const distribution = new cloudfront.Distribution(this, 'X402Distribution', {
       comment: 'x402 Payment-Protected Content Distribution',
+      webAclId: webAcl.attrArn,
       defaultBehavior: {
         origin: new origins.S3Origin(contentBucket),
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
         allowedMethods: cloudfront.AllowedMethods.ALLOW_GET_HEAD_OPTIONS,
         cachedMethods: cloudfront.CachedMethods.CACHE_GET_HEAD_OPTIONS,
-        // Default behavior uses payment verification for all content
+        // Default behavior must not cache — paid content is verified per request.
         cachePolicy: paymentApiCachePolicy,
-        originRequestPolicy: paymentApiOriginRequestPolicy,
         responseHeadersPolicy: responseHeadersPolicy,
-        edgeLambdas: [
-          {
-            functionVersion: paymentVerifier.currentVersion,
-            eventType: cloudfront.LambdaEdgeEventType.ORIGIN_REQUEST,
-          },
-        ],
         compress: true,
       },
       additionalBehaviors: {
@@ -237,12 +217,6 @@ export class X402SellerStack extends cdk.Stack {
           cachedMethods: cloudfront.CachedMethods.CACHE_GET_HEAD_OPTIONS,
           cachePolicy: publicContentCachePolicy,
           responseHeadersPolicy: responseHeadersPolicy,
-          edgeLambdas: [
-            {
-              functionVersion: paymentVerifier.currentVersion,
-              eventType: cloudfront.LambdaEdgeEventType.ORIGIN_REQUEST,
-            },
-          ],
           compress: true,
         },
         // Payment-protected API endpoints - NO caching
@@ -252,14 +226,7 @@ export class X402SellerStack extends cdk.Stack {
           allowedMethods: cloudfront.AllowedMethods.ALLOW_GET_HEAD_OPTIONS,
           cachedMethods: cloudfront.CachedMethods.CACHE_GET_HEAD_OPTIONS,
           cachePolicy: paymentApiCachePolicy,
-          originRequestPolicy: paymentApiOriginRequestPolicy,
           responseHeadersPolicy: responseHeadersPolicy,
-          edgeLambdas: [
-            {
-              functionVersion: paymentVerifier.currentVersion,
-              eventType: cloudfront.LambdaEdgeEventType.ORIGIN_REQUEST,
-            },
-          ],
           compress: true,
         },
         // Static assets - aggressive caching
@@ -384,15 +351,8 @@ export class X402SellerStack extends cdk.Stack {
       { id: 'AwsSolutions-S10', reason: 'Bucket is only accessed via CloudFront OAI, not directly over the internet' },
     ], true);
 
-    NagSuppressions.addResourceSuppressions(paymentVerifier, [
-      { id: 'AwsSolutions-IAM4', reason: 'AWSLambdaBasicExecutionRole is required for Lambda@Edge CloudWatch logging' },
-      { id: 'AwsSolutions-IAM5', reason: 'Wildcard scoped to content bucket — Lambda@Edge reads S3 objects to serve paid content' },
-      { id: 'AwsSolutions-L1', reason: 'Lambda@Edge runtime pinned for compatibility — CloudFront replication requires stable runtime' },
-    ], true);
-
     NagSuppressions.addResourceSuppressions(distribution, [
       { id: 'AwsSolutions-CFR1', reason: 'Demo project — geo restrictions not needed for testnet demo' },
-      { id: 'AwsSolutions-CFR2', reason: 'Demo project — WAF not required for testnet payment demo' },
       { id: 'AwsSolutions-CFR3', reason: 'Demo project — CloudFront access logging not required' },
       { id: 'AwsSolutions-CFR4', reason: 'Using default CloudFront viewer certificate which requires default SSL policy' },
       { id: 'AwsSolutions-CFR7', reason: 'Using legacy S3Origin with OAI — migration to S3BucketOrigin with OAC is a future improvement' },

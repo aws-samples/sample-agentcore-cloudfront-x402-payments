@@ -341,7 +341,7 @@ export class AgentCoreStack extends cdk.Stack {
       resources: [
         // Allow invoking any API Gateway in this account
         `arn:aws:execute-api:${this.region}:${this.account}:*/*/*/*`,
-        // Allow invoking API Gateways in us-east-1 (Lambda@Edge region)
+        // Allow invoking API Gateways in us-east-1 (seller CloudFront + WAF region)
         `arn:aws:execute-api:us-east-1:${this.account}:*/*/*/*`,
       ],
     }));
@@ -361,7 +361,7 @@ export class AgentCoreStack extends cdk.Stack {
       resources: [
         // Allow invoking Lambda functions with x402 prefix
         `arn:aws:lambda:${this.region}:${this.account}:function:x402-*`,
-        // Allow invoking Lambda@Edge functions in us-east-1
+        // Allow invoking x402 Lambda functions in us-east-1 (seller region)
         `arn:aws:lambda:us-east-1:${this.account}:function:x402-*`,
       ],
     }));

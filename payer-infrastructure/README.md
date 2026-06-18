@@ -45,7 +45,7 @@ Three CloudWatch dashboards are created:
 
 - `x402-enterprise-demo-overview` — End-to-end payment flow metrics
 - `x402-payer-agent` — Gateway request rates and throttling
-- `x402-seller-infrastructure` — CloudFront and Lambda@Edge metrics
+- `x402-seller-infrastructure` — CloudFront and AWS WAF metrics
 
 Deploy the observability stack:
 

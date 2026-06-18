@@ -1,6 +1,6 @@
 # x402 Payments using Amazon Bedrock AgentCore
 
-HTTP 402 payment-gated content delivery using AWS Bedrock AgentCore and AgentCore Payments, paying a seller operating on CloudFront, Lambda@Edge, and S3.
+HTTP 402 payment-gated content delivery using AWS Bedrock AgentCore and AgentCore Payments, paying a seller operating on CloudFront, AWS WAF native x402 monetization, and S3.
 
 > **Update — May 7, 2026:** AWS has launched [Amazon Bedrock AgentCore Payments](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/payments.html) (Preview) — bringing native, managed payment capabilities to AI agents built on Amazon Bedrock. AgentCore Payments lets agents autonomously discover, authorize, and execute x402 micropayments with built-in wallet management, policy-based spending controls, and a full audit trail — no custom payment infrastructure required. The architectures and reference implementations described in this repo now integrate directly with AgentCore Payments. [Get started with AgentCore Payments.](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/payments.html)
 
@@ -9,7 +9,7 @@ HTTP 402 payment-gated content delivery using AWS Bedrock AgentCore and AgentCor
 This project demonstrates a payment-gated content delivery system using the [x402 protocol](https://github.com/coinbase/x402):
 
 - **Payer**: AI agent on Bedrock AgentCore Runtime with AgentCore Payments (ProcessPayment API)
-- **Seller**: CloudFront + Lambda@Edge for x402 payment verification
+- **Seller**: CloudFront + AWS WAF native x402 monetization (see [docs/native-waf-x402-migration.md](docs/native-waf-x402-migration.md))
 - **Web UI**: React demo interface
 
 ## Architecture
@@ -57,23 +57,21 @@ flowchart LR
         subgraph Seller["seller-infrastructure"]
             direction TB
             CF_Seller["Amazon CloudFront\n(x402 Payment-Gated)"]
-            LambdaEdge["Lambda@Edge\n(Payment Verifier,\nNode.js 20.x, us-east-1)"]
+            WAF["AWS WAF\n(Native x402 Monetization,\nBot Control v6, us-east-1)"]
             S3_Content["Amazon S3\n(Content Bucket)"]
-            CF_Seller --> LambdaEdge
-            LambdaEdge -->|"Valid payment"| S3_Content
-            LambdaEdge -->|"No payment"| FourOhTwo["402 Response\n+ x402 Headers"]
+            CF_Seller --> WAF
+            WAF -->|"Valid payment"| S3_Content
+            WAF -->|"No payment"| FourOhTwo["402 Response\n+ x402 Headers"]
         end
     end
 
-    Facilitator["x402 Facilitator\n(x402.org)"]
     Blockchain["Base Sepolia\n(USDC Testnet)"]
 
     Browser -->|"HTTPS"| CF_UI
     Browser -->|"API Calls"| APIGW
     Lambda_Proxy -->|"InvokeAgentRuntime"| Runtime
     Agent -->|"HTTPS +\nx402 Headers"| CF_Seller
-    LambdaEdge -->|"Verify & Settle"| Facilitator
-    Facilitator -->|"On-chain\nSettlement"| Blockchain
+    WAF -->|"Verify & Settle\n(native, on-chain)"| Blockchain
     Payments -->|"Sign & Pay"| Blockchain
     Lambda_Proxy -->|"eth_call\n(Balance)"| Blockchain
 ```
@@ -81,7 +79,7 @@ flowchart LR
 Three CDK stacks deploy into a single AWS account:
 - **web-ui-infrastructure** — CloudFront + S3 for the React app, API Gateway + Lambda proxy to AgentCore
 - **payer-infrastructure** — IAM roles (including AgentCore Payments roles), CloudWatch observability for Bedrock AgentCore (Runtime, Gateway, Agent)
-- **seller-infrastructure** — CloudFront + Lambda@Edge for x402 payment-gated content, S3 content bucket
+- **seller-infrastructure** — CloudFront + AWS WAF native x402 monetization for payment-gated content, S3 content bucket
 
 AgentCore Gateway acts as an MCP tool server:
 - Content endpoints exposed as discoverable MCP tools via OpenAPI spec
@@ -96,7 +94,7 @@ The Web UI guides users through a 3-step payment process:
 1. **Step 1: Request Content**
    - User selects content item
    - Agent requests content from CloudFront
-   - Lambda@Edge returns `402 Payment Required` with x402 headers
+   - AWS WAF returns `402 Payment Required` with x402 headers
    - Agent extracts x402_payload and reports payment requirements
 
 2. **Step 2: Confirm Payment**
@@ -104,8 +102,7 @@ The Web UI guides users through a 3-step payment process:
    - Agent calls ProcessPayment via AgentCore Payments (passes x402_payload as-is)
    - AgentCore signs the transaction server-side
    - Agent retries request with payment proof header (X-PAYMENT or PAYMENT-SIGNATURE)
-   - Lambda@Edge verifies signature via x402 facilitator
-   - Facilitator settles payment on-chain
+   - AWS WAF verifies and settles the payment natively on-chain
    - Agent confirms successful payment
 
 3. **Step 3: View Content**
@@ -122,7 +119,7 @@ The Web UI guides users through a 3-step payment process:
 | Tool Discovery | MCP Protocol via Gateway |
 | LLM | Amazon Bedrock (Claude Sonnet) |
 | Payments | [Amazon Bedrock AgentCore Payments](https://docs.aws.amazon.com/bedrock-agentcore/) (ProcessPayment API) |
-| Content Delivery | CloudFront + Lambda@Edge |
+| Content Delivery | CloudFront + AWS WAF (native x402 monetization) |
 | Payment Protocol | [x402](https://github.com/coinbase/x402) |
 | Network | Base Sepolia (testnet) |
 | Web UI | React + Vite + TypeScript |
@@ -144,10 +141,9 @@ sample-agentcore-cloudfront-x402-payments/
 │
 ├── seller-infrastructure/    # CDK Stack for x402 Payment API ← Agent calls this
 │   ├── lib/
-│   │   ├── cloudfront-stack.ts
-│   │   └── lambda-edge/
-│   │       ├── payment-verifier.ts  # x402 payment verification
-│   │       └── content-config.ts    # Content & pricing config
+│   │   ├── cloudfront-stack.ts      # CloudFront + WAF WebACL (native x402)
+│   │   └── waf/
+│   │       └── monetization-config.ts  # WebACL rules + MonetizationConfig + pricing
 │   └── content/              # S3-backed content files
 │
 ├── web-ui/                   # React Frontend (Vite + TypeScript)
@@ -171,7 +167,7 @@ This project deploys **two separate CloudFront distributions** for different pur
 
 | Stack | CloudFront Purpose | Called By |
 |-------|-------------------|-----------|
-| `seller-infrastructure` | Payment-gated API (returns 402, verifies payments) | AI Agent |
+| `seller-infrastructure` | Payment-gated API (AWS WAF returns 402, verifies payments natively) | AI Agent |
 | `web-ui-infrastructure` | Static React app hosting | Browser |
 
 The Web UI (browser) → Agent → Seller API for ease of use.
@@ -372,7 +368,7 @@ pytest tests/test_error_scenarios.py -v   # Error handling
 - CloudWatch Dashboards
 - OpenTelemetry tracing
 - Structured JSON logging
-- EMF metrics from Lambda@Edge
+- AWS WAF CloudWatch metrics + sampled requests per rule (Bot Control, monetization)
 
 ## Security
 
@@ -392,7 +388,7 @@ pytest tests/test_error_scenarios.py -v   # Error handling
 ## References
 
 - [x402 Protocol Specification](https://github.com/coinbase/x402/tree/main/specs)
-- [x402 CloudFront + Lambda@Edge Example](https://github.com/coinbase/x402/tree/main/examples/typescript/servers/cloudfront-lambda-edge) — the seller infrastructure in this project is based on this example
+- [Migration: Lambda@Edge → native CloudFront + WAF x402](docs/native-waf-x402-migration.md) — the seller infrastructure previously used a Lambda@Edge verifier ([x402 CloudFront + Lambda@Edge example](https://github.com/coinbase/x402/tree/main/examples/typescript/servers/cloudfront-lambda-edge)); it now uses AWS WAF native x402 monetization
 - [Strands Agents Documentation](https://strandsagents.com/latest/documentation/docs/)
 - [Bedrock AgentCore Documentation](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/payments.html)
 - [EIP-3009: Transfer With Authorization](https://eips.ethereum.org/EIPS/eip-3009)
