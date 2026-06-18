@@ -80,11 +80,16 @@ function vis(metricName: string): VisibilityConfig {
   return { SampledRequestsEnabled: true, CloudWatchMetricsEnabled: true, MetricName: metricName };
 }
 
-/** STARTS_WITH UriPath match (SearchString base64-encoded per the WAF JSON contract). */
+/**
+ * STARTS_WITH UriPath match. In the CloudFormation/L1 (`CfnWebACL`) representation,
+ * `SearchString` is the PLAIN string — CloudFormation base64-encodes it for the WAF
+ * API itself. (Encoding it here too would double-encode: WAF would search for the
+ * literal base64 text and never match. Verified against a live deploy.)
+ */
 function pathMatch(prefix: string): Record<string, unknown> {
   return {
     ByteMatchStatement: {
-      SearchString: Buffer.from(prefix).toString('base64'),
+      SearchString: prefix,
       FieldToMatch: { UriPath: {} },
       TextTransformations: [{ Priority: 0, Type: 'NONE' }],
       PositionalConstraint: 'STARTS_WITH',

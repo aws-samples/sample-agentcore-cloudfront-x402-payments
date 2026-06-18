@@ -57,4 +57,18 @@ describe('native WAF monetization config', () => {
     const dataset = rules.find((r) => r.Name === 'Monetize-dataset');
     expect((dataset as any).Action.Monetize.PriceMultiplier).toBe('10');
   });
+
+  it('ByteMatch SearchString is the PLAIN URI prefix, NOT base64 (CFN encodes it itself)', () => {
+    // Regression: encoding here too double-encodes — WAF then searches for the literal
+    // base64 text and never matches, so every request falls through to the default
+    // Allow and no 402 ever fires. Verified against a live deploy.
+    const rules = buildWebAclRules('x402seller');
+    const dataset = rules.find((r) => r.Name === 'Monetize-dataset') as any;
+    expect(dataset.Statement.ByteMatchStatement.SearchString).toBe('/dataset');
+    const discovery = rules.find((r) => r.Name === 'allow-discovery') as any;
+    const searchStrings = discovery.Statement.OrStatement.Statements.map(
+      (s: any) => s.ByteMatchStatement.SearchString,
+    );
+    expect(searchStrings).toEqual(['/mcp/', '/.well-known/']);
+  });
 });
