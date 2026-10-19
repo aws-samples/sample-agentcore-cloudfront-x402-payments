@@ -151,6 +151,14 @@ Environment variables (see `.env.example`):
 | `PROCESS_PAYMENT_ROLE_ARN` | IAM role for ProcessPayment |
 | `USER_ID` | End-user identifier |
 | `SELLER_API_URL` | CloudFront distribution URL |
+| `SELLER_PAY_TO_ADDRESSES` | Optional comma-separated seller wallet addresses; when set, `process_payment` refuses any other `payTo` |
+
+## Outbound Request Safety
+
+Tool arguments such as content paths are chosen by the model, so the agent treats them as untrusted:
+
+- Paths must start with a single `/` and stay on `SELLER_API_URL`'s scheme, host and port. Full URLs, hostnames, `@`, `\`, whitespace, control or non-ASCII characters, and `.`/`..` segments are rejected, including percent-encoded and double-encoded forms. A rejected path returns `http_status: 0` with an error message and sends no request.
+- Redirects are followed only while they stay on the seller's origin (an HTTP to HTTPS upgrade on the same host is allowed). A redirect to any other origin is refused before the payment header is sent to it.
 
 ## License
 

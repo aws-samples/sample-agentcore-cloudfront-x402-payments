@@ -17,7 +17,7 @@ from ..config import config
 from ..tracing import get_tracer
 from ..metrics import get_metrics_emitter
 from .payment import get_last_payment_context
-from .url_safety import UnsafeRequestUrlError, build_seller_url
+from .url_safety import UnsafeRequestUrlError, build_seller_url, redirect_guard_hooks
 
 
 def _invalid_url_result(
@@ -74,13 +74,15 @@ def request_content(url: str) -> dict[str, Any]:
         span.set_attribute("content.path", url)
 
         try:
-            # Redirects are not followed: a redirect could send this request, and the payment
-            # requirement taken from its response, to a different origin.
-            with httpx.Client(timeout=30.0) as client:
+            # Redirects are followed only within the seller's origin, so the payment requirement
+            # is never taken from a response served by a different origin.
+            with httpx.Client(
+                timeout=30.0, event_hooks=redirect_guard_hooks(config.seller_api_url)
+            ) as client:
                 response = client.get(
                     full_url,
                     headers={"Accept": "application/json"},
-                    follow_redirects=False,
+                    follow_redirects=True,
                 )
 
                 span.set_attribute("http.status_code", response.status_code)
@@ -292,7 +294,11 @@ def request_content_with_payment(url: str) -> dict[str, Any]:
         last_response = None
 
         try:
-            with httpx.Client(timeout=30.0) as client:
+            # The redirect guard refuses any hop to a different origin before the payment
+            # header is sent to it; same-origin redirects are followed.
+            with httpx.Client(
+                timeout=30.0, event_hooks=redirect_guard_hooks(config.seller_api_url)
+            ) as client:
                 for attempt in range(1, max_attempts + 1):
                     response = client.post(
                         full_url,
@@ -300,9 +306,7 @@ def request_content_with_payment(url: str) -> dict[str, Any]:
                             "Accept": "application/json",
                             header_name: encoded_header,
                         },
-                        # Never follow redirects with the payment header attached: it would be
-                        # forwarded to whatever origin the redirect names.
-                        follow_redirects=False,
+                        follow_redirects=True,
                     )
                     last_response = response
 
