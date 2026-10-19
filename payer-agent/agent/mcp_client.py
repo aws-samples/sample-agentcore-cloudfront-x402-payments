@@ -40,6 +40,11 @@ from strands import tool
 from .config import config
 from .tracing import get_tracer
 from .metrics import get_metrics_emitter
+from .tools.url_safety import (
+    UnsafeRequestUrlError,
+    async_redirect_guard_hooks,
+    build_seller_url,
+)
 
 
 @dataclass
@@ -393,8 +398,18 @@ class MCPClient:
             span.set_attribute("mcp.endpoint_path", endpoint_path)
             span.set_attribute("mcp.has_payment", payment_signature is not None)
             
-            # Build the full URL to the content endpoint
-            invoke_url = f"{self.config.gateway_url}{endpoint_path}"
+            # Build the full URL to the content endpoint. endpoint_path comes from the discovery
+            # response, so it gets the same checks as a model-supplied path.
+            try:
+                invoke_url = build_seller_url(self.config.gateway_url, endpoint_path)
+            except UnsafeRequestUrlError as e:
+                span.set_attribute("error.type", "invalid_url")
+                span.set_attribute("error.message", str(e))
+                return MCPInvocationResponse(
+                    success=False,
+                    status_code=0,
+                    error=f"Invalid endpoint path {endpoint_path!r}: {e}",
+                )
             
             # Build request headers
             headers = {
@@ -407,7 +422,11 @@ class MCPClient:
             
             start_time = time.time()
             
-            async with httpx.AsyncClient() as client:
+            # Redirects are followed only within the gateway's origin: the redirect guard refuses
+            # any hop to a different origin before the payment header is sent to it.
+            async with httpx.AsyncClient(
+                event_hooks=async_redirect_guard_hooks(self.config.gateway_url)
+            ) as client:
                 try:
                     # Make GET request to the content endpoint
                     response = await client.get(
