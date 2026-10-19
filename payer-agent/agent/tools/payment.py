@@ -71,6 +71,17 @@ def get_last_payment_context() -> dict:
     return _last_payment_context
 
 
+def _is_allowed_payee(pay_to: str, allowed: tuple[str, ...]) -> bool:
+    """Return True if pay_to is one of the allowed seller addresses.
+
+    EVM addresses (0x-prefixed hex) are compared case-insensitively because their checksum
+    casing is optional; any other address format is compared exactly.
+    """
+    if pay_to.lower().startswith("0x"):
+        return pay_to.lower() in {address.lower() for address in allowed}
+    return pay_to in allowed
+
+
 @tool
 def process_payment(x402_payload: dict, x402_version: int = 1) -> dict[str, Any]:
     """Execute an x402 crypto payment via AgentCore Payments ProcessPayment API.
@@ -102,6 +113,25 @@ def process_payment(x402_payload: dict, x402_version: int = 1) -> dict[str, Any]
         span.set_attribute("payment.x402_version", x402_version)
         span.set_attribute("payment.amount", x402_payload.get("amount", ""))
         span.set_attribute("payment.network", x402_payload.get("network", ""))
+
+        pay_to = str(x402_payload.get("payTo", ""))
+        if config.seller_pay_to_addresses and not _is_allowed_payee(
+            pay_to, config.seller_pay_to_addresses
+        ):
+            span.set_attribute("error.type", "payee_not_allowed")
+            metrics.record_error(
+                error_type="payee_not_allowed",
+                error_message=f"payTo {pay_to!r} is not in SELLER_PAY_TO_ADDRESSES",
+                operation="process_payment",
+            )
+            return {
+                "success": False,
+                "status": "REJECTED",
+                "error": (
+                    f"Payment refused: payTo {pay_to!r} is not an allowed seller address. "
+                    "Do not retry this payment."
+                ),
+            }
 
         try:
             dp_client = _get_dp_client()

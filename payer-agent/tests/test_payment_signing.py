@@ -24,6 +24,7 @@ class TestProcessPaymentAPICall:
         mock_config.payment_manager_arn = "arn:aws:bedrock-agentcore:us-west-2:123:payment-manager/mgr-1"
         mock_config.payment_session_id = "session-xyz"
         mock_config.payment_instrument_id = "instrument-123"
+        mock_config.seller_pay_to_addresses = ()
         mock_get_client.return_value = mock_dp_client
 
         payload = {"scheme": "exact", "network": "eip155:84532", "amount": "500"}

@@ -17,6 +17,25 @@ from ..config import config
 from ..tracing import get_tracer
 from ..metrics import get_metrics_emitter
 from .payment import get_last_payment_context
+from .url_safety import UnsafeRequestUrlError, build_seller_url
+
+
+def _invalid_url_result(
+    span: Any, metrics: Any, url: str, error: UnsafeRequestUrlError
+) -> dict[str, Any]:
+    """Record and return the tool result for a path rejected by build_seller_url."""
+    span.set_attribute("error.type", "invalid_url")
+    span.set_attribute("error.message", str(error))
+    metrics.record_content_request(
+        status_code=0,
+        latency_ms=0.0,
+        content_path=url,
+        error="invalid_url",
+    )
+    return {
+        "http_status": 0,
+        "error_message": f"Invalid content URL: {error}",
+    }
 
 
 @tool
@@ -34,7 +53,8 @@ def request_content(url: str) -> dict[str, Any]:
     the GET version).
 
     Args:
-        url: The content URL path (e.g., "/api/premium-article")
+        url: The content URL path on the seller API, starting with "/"
+            (e.g., "/api/premium-article"). Full URLs and hostnames are rejected.
 
     Returns:
         Dictionary with http_status, data (if 200), or x402_payload and
@@ -45,17 +65,22 @@ def request_content(url: str) -> dict[str, Any]:
     start_time = time.time()
 
     with tracer.start_as_current_span("content.request") as span:
-        full_url = f"{config.seller_api_url}{url}"
+        try:
+            full_url = build_seller_url(config.seller_api_url, url)
+        except UnsafeRequestUrlError as e:
+            return _invalid_url_result(span, metrics, url, e)
         span.set_attribute("http.url", full_url)
         span.set_attribute("http.method", "GET")
         span.set_attribute("content.path", url)
 
         try:
+            # Redirects are not followed: a redirect could send this request, and the payment
+            # requirement taken from its response, to a different origin.
             with httpx.Client(timeout=30.0) as client:
                 response = client.get(
                     full_url,
                     headers={"Accept": "application/json"},
-                    follow_redirects=True,
+                    follow_redirects=False,
                 )
 
                 span.set_attribute("http.status_code", response.status_code)
@@ -207,7 +232,7 @@ def request_content_with_payment(url: str) -> dict[str, Any]:
     (waiting for on-chain transaction settlement).
 
     Args:
-        url: The content URL path (e.g., "/api/premium-article") — same as
+        url: The content URL path on the seller API (e.g., "/api/premium-article") — same as
             the one that returned 402.
 
     Returns:
@@ -218,7 +243,10 @@ def request_content_with_payment(url: str) -> dict[str, Any]:
     start_time = time.time()
 
     with tracer.start_as_current_span("content.request_with_payment") as span:
-        full_url = f"{config.seller_api_url}{url}"
+        try:
+            full_url = build_seller_url(config.seller_api_url, url)
+        except UnsafeRequestUrlError as e:
+            return _invalid_url_result(span, metrics, url, e)
         span.set_attribute("http.url", full_url)
         span.set_attribute("content.path", url)
         span.set_attribute("payment.included", True)
@@ -272,7 +300,9 @@ def request_content_with_payment(url: str) -> dict[str, Any]:
                             "Accept": "application/json",
                             header_name: encoded_header,
                         },
-                        follow_redirects=True,
+                        # Never follow redirects with the payment header attached: it would be
+                        # forwarded to whatever origin the redirect names.
+                        follow_redirects=False,
                     )
                     last_response = response
 

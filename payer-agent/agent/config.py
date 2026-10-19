@@ -29,6 +29,9 @@ class AgentConfig:
 
     # Seller API configuration
     seller_api_url: str = ""
+    # Optional allowlist of seller wallet addresses. When set, process_payment refuses any
+    # payment requirement whose payTo is not in this list.
+    seller_pay_to_addresses: tuple[str, ...] = ()
 
     # OpenTelemetry configuration
     otel_endpoint: str = ""
@@ -48,6 +51,11 @@ class AgentConfig:
             user_id=os.getenv("USER_ID", ""),
             dp_endpoint=os.getenv("DP_ENDPOINT", ""),
             seller_api_url=os.getenv("SELLER_API_URL", ""),
+            seller_pay_to_addresses=tuple(
+                address.strip()
+                for address in os.getenv("SELLER_PAY_TO_ADDRESSES", "").split(",")
+                if address.strip()
+            ),
             otel_endpoint=os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", ""),
             otel_console_export=os.getenv("OTEL_CONSOLE_EXPORT", "").lower() == "true",
         )
