@@ -24,6 +24,7 @@ from ..config import config
 from ..tracing import get_tracer
 from ..metrics import get_metrics_emitter
 from .payment import get_last_payment_context
+from .url_safety import UnsafeRequestUrlError, build_seller_url
 
 
 @tool
@@ -151,8 +152,15 @@ def request_service(
         path_name = service_name.replace("get_", "").replace("_", "-")
         endpoint_path = f"/api/{path_name}"
 
-        gateway_url = config.seller_api_url
-        full_url = f"{gateway_url}{endpoint_path}"
+        try:
+            full_url = build_seller_url(config.seller_api_url, endpoint_path)
+        except UnsafeRequestUrlError as e:
+            span.set_attribute("error.type", "invalid_url")
+            span.set_attribute("error.message", str(e))
+            return {
+                "http_status": 0,
+                "error_message": f"Invalid service name {service_name!r}: {e}",
+            }
         span.set_attribute("http.url", full_url)
 
         # Check if we have a payment proof from a prior process_payment call
@@ -194,13 +202,15 @@ def request_service(
             method = "POST"  # Paid requests use POST
 
         try:
+            # Redirects are not followed: a redirect would forward the payment header, or take
+            # the payment requirement, from a different origin.
             with httpx.Client(timeout=30.0) as client:
                 if has_proof:
                     # Retry with backoff for payment settlement
                     max_attempts = 6
                     for attempt in range(1, max_attempts + 1):
                         response = client.request(
-                            method, full_url, headers=headers, follow_redirects=True
+                            method, full_url, headers=headers, follow_redirects=False
                         )
                         if response.status_code != 402:
                             break
@@ -208,7 +218,7 @@ def request_service(
                             time.sleep(2 * attempt)
                 else:
                     response = client.get(
-                        full_url, headers=headers, follow_redirects=True
+                        full_url, headers=headers, follow_redirects=False
                     )
 
                 latency_ms = (time.time() - start_time) * 1000
@@ -275,7 +285,7 @@ def request_service(
                             get_resp = client.get(
                                 full_url,
                                 headers={"Accept": "application/json"},
-                                follow_redirects=True,
+                                follow_redirects=False,
                             )
                             if get_resp.status_code == 402:
                                 get_info = None
